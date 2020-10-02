@@ -1,0 +1,21 @@
+# Ledger
+
+This library implements an event log, entries can be written, and consumers
+of the log will resume the reading since the last known checkpoint. The behaviour
+for missing checkpoints can be customized, supporting latest, earliest and custom
+offset, each one changing the starting point from which the consumer will read
+the log.
+
+It does so with two primitives:
+
+* Master ledger, writes events and commits offsets.
+* Normal ledger, reads written events from a given checkpoint.
+
+The underlying storage is a badger key value store.
+
+## Project status
+
+This was an internal package for a pet project of mine. Its in process
+of being open-sourced and better generalized. Expect breaking changes
+in the APIs. It's not a mature project, and the whole idea behind
+publishing it is to make it mature.
