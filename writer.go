@@ -49,7 +49,7 @@ func (w *Writer) initialise() (err error) {
 }
 
 // Write a payload to the log, updates writer offset.
-func (l *Writer) Write(message []byte) (int, error) {
+func (l *Writer) Write(message []byte) (uint64, error) {
 	var idx uint64
 
 	idx, err := l.seq.Next()
