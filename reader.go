@@ -89,6 +89,10 @@ func (l *Reader) Open() (err error) {
 	})
 }
 
+func (l *Reader) Commit(idx uint64) error {
+	return l.readerChk.Commit(idx)
+}
+
 func buildWriteScanKey(prefix string) []byte {
 	return []byte(fmt.Sprintf("%s-write", prefix))
 }
