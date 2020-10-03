@@ -75,7 +75,7 @@ func (l *Writer) Write(message []byte) (int, error) {
 		return 0, err
 	}
 
-	return len(message), l.chk.Commit(idx)
+	return idx, l.chk.Commit(idx)
 }
 
 // Close the writer by releasing the sequence. Not releasing the sequence
