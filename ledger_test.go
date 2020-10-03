@@ -27,19 +27,22 @@ func TestLedgerWriteAndRead(t *testing.T) {
 	for _, opts := range options {
 		t.Logf("running test with options: %v", opts)
 		runTest(func(db *badger.DB) {
-			master := NewMasterOpts("channel-1", db, opts)
+			master, err := NewMasterOpts("channel-1", db, opts)
+			assert.Nil(t, err)
 			master.Write([]byte("zero"))
 			master.Write([]byte("first"))
 
 			out := new(bytes.Buffer)
-			slave := NewOpts(master, "client-1", out, opts)
+			slave, err := NewOpts(master, "client-1", out, opts)
+			assert.Nil(t, err)
 			master.Write([]byte("second"))
 			master.Write([]byte("third"))
 			slave.Open()
 			assert.Equal(t, "secondthird", out.String())
 
 			out = new(bytes.Buffer)
-			slave = NewOpts(master, "client-1", out, opts)
+			slave, err = NewOpts(master, "client-1", out, opts)
+			assert.Nil(t, err)
 			slave.Open()
 			assert.Equal(t, "", out.String())
 		})
@@ -49,31 +52,36 @@ func TestLedgerWriteAndRead(t *testing.T) {
 
 func TestLedgerModeEarliest(t *testing.T) {
 	runTest(func(db *badger.DB) {
-		master := NewMaster("channel-1", db)
+		master, err := NewMaster("channel-1", db)
+		assert.Nil(t, err)
 		master.Write([]byte("first"))
 		master.Write([]byte("second"))
 
 		out := new(bytes.Buffer)
-		slave := NewOpts(master, "client-1", out, &Options{Mode: ModeEarliest})
+		opts := DefaultOptions()
+		opts.Mode = ModeEarliest
+		slave, err := NewOpts(master, "client-1", out, opts)
+		assert.Nil(t, err)
+		master.Write([]byte("third"))
 		slave.Open()
 
-		assert.Equal(t, "firstsecond", out.String())
+		assert.Equal(t, "firstsecondthird", out.String())
 	})
 }
 
 func TestLedgerModeCustom(t *testing.T) {
 	runTest(func(db *badger.DB) {
-		master := NewMaster("channel-1", db)
+		master, err := NewMaster("channel-1", db)
+		assert.Nil(t, err)
 		master.Write([]byte("first"))
 		master.Write([]byte("second"))
 
 		out := new(bytes.Buffer)
-		opts := &Options{
-			Mode:              ModeCustom,
-			CustomIndex:       1,
-			KeySpaceBatchSize: 1000,
-		}
-		slave := NewOpts(master, "client-1", out, opts)
+		opts := DefaultOptions()
+		opts.Mode = ModeCustom
+		opts.CustomIndex = 1
+		slave, err := NewOpts(master, "client-1", out, opts)
+		assert.Nil(t, err)
 		slave.Open()
 
 		assert.Equal(t, "second", out.String())
@@ -82,17 +90,17 @@ func TestLedgerModeCustom(t *testing.T) {
 
 func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 	runTest(func(db *badger.DB) {
-		master := NewMaster("channel-1", db)
+		master, err := NewMaster("channel-1", db)
+		assert.Nil(t, err)
 		master.Write([]byte("first"))
 		master.Write([]byte("second"))
 
 		out := new(bytes.Buffer)
-		opts := &Options{
-			Mode:              ModeCustom,
-			CustomIndex:       10,
-			KeySpaceBatchSize: 1000,
-		}
-		slave := NewOpts(master, "client-1", out, opts)
+		opts := DefaultOptions()
+		opts.Mode = ModeCustom
+		opts.CustomIndex = 10
+		slave, err := NewOpts(master, "client-1", out, opts)
+		assert.Nil(t, err)
 
 		master.Write([]byte("third"))
 		slave.Open()

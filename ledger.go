@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/alevinval/ledger/pkg/proto"
 	"github.com/dgraph-io/badger"
 	"github.com/go-kit/kit/log"
 )
@@ -26,13 +25,17 @@ type (
 		seq        *badger.Sequence
 		mu         *sync.Mutex
 		opts       *Options
+		chk        *checkpoint
 	}
 
 	Ledger struct {
-		basePrefix string
-		out        io.Writer
-		master     *MasterLedger
-		opts       *Options
+		id               string
+		masterBasePrefix string
+		out              io.Writer
+		opts             *Options
+		db               *storage
+		chk              *checkpoint
+		chkMaster        *checkpoint
 	}
 
 	Options struct {
@@ -64,63 +67,107 @@ func DefaultOptions() *Options {
 }
 
 // New slave ledger
-func New(master *MasterLedger, id string, out io.Writer) *Ledger {
+func New(master *MasterLedger, id string, out io.Writer) (*Ledger, error) {
 	return NewOpts(master, id, out, DefaultOptions())
 }
 
 // New slave ledger with custom options
-func NewOpts(master *MasterLedger, id string, out io.Writer, opts *Options) *Ledger {
+func NewOpts(master *MasterLedger, id string, out io.Writer, opts *Options) (*Ledger, error) {
 	basePrefix := fmt.Sprintf("ledger-%s-slave-%s", master.id, id)
 	logger.Log("slave-prefix", basePrefix)
 	l := &Ledger{
-		basePrefix: basePrefix,
-		out:        out,
-		master:     master,
-		opts:       opts,
+		id:               id,
+		masterBasePrefix: master.basePrefix,
+		chk:              newCheckpoint(basePrefix, master.db, opts),
+		chkMaster:        master.chk,
+		out:              out,
+		opts:             opts,
+		db:               master.db,
 	}
-	_ = l.master.getCheckPoint(l.basePrefix, opts)
-	return l
+	return l, l.initialise()
 }
 
-func NewMaster(id string, db *badger.DB) *MasterLedger {
+func NewMaster(id string, db *badger.DB) (*MasterLedger, error) {
 	return NewMasterOpts(id, db, DefaultOptions())
 }
 
 // NewMaster ledger creation
-func NewMasterOpts(id string, db *badger.DB, opts *Options) *MasterLedger {
+func NewMasterOpts(id string, db *badger.DB, opts *Options) (*MasterLedger, error) {
 	basePrefix := fmt.Sprintf("ledger-%s", id)
 	logger.Log("master-prefix", basePrefix)
 	seq, err := db.GetSequence(buildWriteSeqKey(basePrefix), opts.SequenceBandwidth)
 	if err != nil {
-		logger.Log("get_sequence", err)
-		panic("could not retrieve a sequence from badger")
+		return nil, err
 	}
 
-	return &MasterLedger{
+	l := &MasterLedger{
 		id:         id,
 		basePrefix: basePrefix,
 		db:         &storage{db, opts},
 		seq:        seq,
 		mu:         new(sync.Mutex),
 		opts:       opts,
+		chk:        newCheckpoint(basePrefix, &storage{db, opts}, opts),
 	}
+
+	return l, l.initialise()
 }
 
-func (l *MasterLedger) Write(message []byte) {
-	var idx uint64
-	var err error
+func (l *MasterLedger) initialise() (err error) {
+	// Ensure a checkpoint exists before anything else
+	_, notFoundErr := l.chk.GetCheckpoint()
+	if notFoundErr != nil {
+		err = l.chk.Commit(0)
+	}
+	return
+}
 
-	for {
+func (l *Ledger) initialise() (err error) {
+	// Ensure a checkpoint exists before anything else
+	_, notFoundErr := l.chk.GetCheckpoint()
+	if notFoundErr != nil {
+
+		// In this case, figure out which offset should be committed
+		// based on the configured options (custom, earliest, latest...)
+		cp, err := l.chk.GetCheckpointFrom(l.chkMaster)
+		if err == nil {
+			err = l.chk.Commit(cp.Index)
+		} else {
+			// This should never happen, if it does the underlying storage
+			// may have issues
+			logger.Log("error", "cannot create starting checkpoint")
+		}
+	}
+	return
+}
+
+func (l *MasterLedger) Write(message []byte) error {
+	var idx uint64
+
+	idx, err := l.seq.Next()
+	if err != nil {
+		return err
+	}
+
+	// Always skip index zero because our scan is not inclusive and uint64 is used
+	// to represent offsets. Because less than zero cannot be represented, zero value
+	// is reserved to indicate a scan from earliest available offset.
+	if idx == 0 {
 		idx, err = l.seq.Next()
-		if err == nil && idx != 0 {
-			break
+		if err != nil {
+			return err
 		}
 	}
 
 	key := buildWriteKey(l.basePrefix, idx)
 	logger.Log("writeKey", key)
-	l.db.PutBytes(key, message)
-	l.commit(l.basePrefix, idx)
+
+	err = l.db.PutBytes(key, message)
+	if err != nil {
+		return err
+	}
+
+	return l.chk.Commit(idx)
 }
 
 // Close the ledger by releasing the sequence. Not releasing the sequence
@@ -131,77 +178,32 @@ func (l *MasterLedger) Close() {
 	l.seq.Release()
 }
 
-func (l *MasterLedger) getCheckPoint(prefix string, opts *Options) *proto.CheckPoint {
-	var cp = &proto.CheckPoint{}
-	key := buildCheckPointKey(prefix)
-	err := l.db.Get(key, cp)
+func (l *Ledger) Open() (err error) {
+	cp, err := l.chk.GetCheckpoint()
 	if err != nil {
-		logger.Log("master", "getCheckPoint", "missing-key", key)
-		if l.basePrefix != prefix {
-			if opts.Mode == ModeLatest {
-				latest := l.getCheckPoint(l.basePrefix, l.opts)
-				l.commit(prefix, latest.Index)
-			} else if opts.Mode == ModeEarliest {
-				l.commit(prefix, 0)
-			} else if opts.Mode == ModeCustom {
-				max := l.getCheckPoint(l.basePrefix, opts).Index
-				if opts.CustomIndex >= max {
-					l.commit(prefix, max)
-				} else {
-					l.commit(prefix, opts.CustomIndex)
-				}
-			}
-		}
+		logger.Log("ledger-open", "cannot retrieve slave checkpoint", "error", err)
+		return
 	}
-	return cp
-}
 
-func (l *MasterLedger) commit(prefix string, index uint64) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	cp := &proto.CheckPoint{
-		Index: index,
-	}
-	key := buildCheckPointKey(prefix)
-	return l.db.Put(key, cp)
-}
-
-func (l *Ledger) Open() {
-	startIdx := l.master.getCheckPoint(l.basePrefix, l.opts).Index
+	startIdx := cp.Index
 	scanPrefix := l.buildWriteScanKey()
-	logger.Log("slave", "scanning", "prefix", scanPrefix, "startIdx", startIdx)
-	l.master.db.ScanKeysIndexed(scanPrefix, startIdx, func(k []byte, idx uint64) {
-		logger.Log("slave", "replaying", "key", k)
-		value, err := l.master.db.GetBytes(k)
-		if err == nil {
-			_, err = l.out.Write(value)
-			l.commit(idx)
-		} else {
-			panic(err)
+	logger.Log("ledger-open", "scanning", "prefix", scanPrefix, "startIdx", startIdx)
+	return l.db.ScanKeysIndexed(scanPrefix, startIdx, func(k []byte, idx uint64) (err error) {
+		logger.Log("ledger-open", "replaying", "key", k)
+		value, err := l.db.GetBytes(k)
+		if err != nil {
+			return
 		}
+		_, err = l.out.Write(value)
+		if err != nil {
+			return
+		}
+		return l.chk.Commit(idx)
 	})
 }
 
-func (l *Ledger) Commit() {
-	index := l.master.getCheckPoint(l.master.basePrefix, l.opts).Index
-	l.commit(index)
-}
-
-func (l *Ledger) commit(index uint64) error {
-	cp := &proto.CheckPoint{
-		Index: index,
-	}
-	key := buildCheckPointKey(l.basePrefix)
-	return l.master.db.Put(key, cp)
-}
-
 func (l *Ledger) buildWriteScanKey() []byte {
-	return []byte(fmt.Sprintf("%s-write", l.master.basePrefix))
-}
-
-func buildCheckPointKey(prefix string) []byte {
-	return []byte(fmt.Sprintf("%s-checkpoint", prefix))
+	return []byte(fmt.Sprintf("%s-write", l.masterBasePrefix))
 }
 
 func buildWriteSeqKey(prefix string) []byte {

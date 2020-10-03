@@ -71,7 +71,7 @@ func (s *storage) Put(key []byte, pb proto.Message) error {
 	return s.PutBytes(key, value)
 }
 
-func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k []byte, idx uint64)) error {
+func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k []byte, idx uint64) (err error)) error {
 	return s.db.Update(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
@@ -86,7 +86,10 @@ func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k 
 				k := it.Item().KeyCopy(nil)
 				idx, _ := strconv.ParseUint(string(bytes.TrimPrefix(k, prefix)), 10, 64)
 				if idx > startIdx {
-					cb(k, idx)
+					err := cb(k, idx)
+					if err != nil {
+						return err
+					}
 					isEmptySeek = false
 				}
 			}
