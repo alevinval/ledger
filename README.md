@@ -8,8 +8,8 @@ the log.
 
 It does so with two primitives:
 
-* Master ledger, writes events and commits offsets.
-* Normal ledger, reads written events from a given checkpoint.
+* Ledger writer, writes events and commits offsets.
+* Ledger reader, reads written events from a given checkpoint.
 
 The underlying storage is a badger key value store.
 
