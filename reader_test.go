@@ -119,14 +119,15 @@ func TestLedgerOpenTicker(t *testing.T) {
 		r, err := NewReader(w, "client-1", out)
 		assert.Nil(t, err)
 
-		r.OpenTicker(1000)
 		w.Write([]byte("first"))
+		r.OpenTicker(400)
+		assert.Equal(t, "first", out.String())
+
+		time.Sleep(300 * time.Millisecond)
 		w.Write([]byte("second"))
+		assert.Equal(t, "first", out.String())
 
-		time.Sleep(500 * time.Millisecond)
-		assert.Equal(t, "", out.String())
-
-		time.Sleep(1000 * time.Millisecond)
+		time.Sleep(150 * time.Millisecond)
 		assert.Equal(t, "firstsecond", out.String())
 	})
 }

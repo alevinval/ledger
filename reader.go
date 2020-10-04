@@ -27,6 +27,7 @@ type (
 		readerChk    *checkpoint
 		writerChk    *checkpoint
 		closeCh      chan struct{}
+		closedCh     chan struct{}
 		mu           *sync.Mutex
 	}
 )
@@ -49,6 +50,7 @@ func NewReaderOpts(w *Writer, id string, out io.Writer, opts *Options) (*Reader,
 		opts:         opts,
 		db:           w.db,
 		closeCh:      make(chan struct{}),
+		closedCh:     make(chan struct{}),
 		mu:           new(sync.Mutex),
 	}
 	return l, l.initialise()
@@ -74,9 +76,6 @@ func (l *Reader) initialise() (err error) {
 }
 
 func (l *Reader) Open() (err error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	cp, err := l.readerChk.GetCheckpoint()
 	if err != nil {
 		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
@@ -108,17 +107,19 @@ func (l *Reader) OpenTicker(tickInMs time.Duration) {
 	}
 
 	l.isTicking = true
+	l.Open()
 	go func() {
 		logger.Log("ledger-open-ticker", "started ticking")
-		for l.isTicking {
+		for {
 			select {
 			case <-timeout(tickInMs):
 				l.Open()
 			case <-l.closeCh:
+				logger.Log("ledger-open-ticker", "stopped ticking")
+				l.closedCh <- struct{}{}
 				return
 			}
 		}
-		logger.Log("ledger-open-ticker", "stopped ticking")
 	}()
 }
 
@@ -126,7 +127,9 @@ func (l *Reader) Close() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	logger.Log("ledger-close", "ledger being closed")
 	l.closeCh <- struct{}{}
+	<-l.closedCh
 	l.isTicking = false
 }
 
