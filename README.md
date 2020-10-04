@@ -13,6 +13,10 @@ It does so with two primitives:
 
 The underlying storage is a badger key value store.
 
+Ledger can be used to ensure all events that reach your application
+are handled without a loss (in-process), plans for the future could
+involve a distributed ledger.
+
 ## Project status
 
 This was an internal package for a pet project of mine. Its in process
