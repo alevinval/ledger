@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
+	"time"
 
 	"github.com/go-kit/kit/log"
 )
@@ -17,12 +19,15 @@ func init() {
 type (
 	Reader struct {
 		id           string
+		isTicking    bool
 		writeScanKey []byte
 		out          io.Writer
 		opts         *Options
 		db           *storage
 		readerChk    *checkpoint
 		writerChk    *checkpoint
+		closeCh      chan struct{}
+		mu           *sync.Mutex
 	}
 )
 
@@ -43,6 +48,8 @@ func NewReaderOpts(w *Writer, id string, out io.Writer, opts *Options) (*Reader,
 		out:          out,
 		opts:         opts,
 		db:           w.db,
+		closeCh:      make(chan struct{}),
+		mu:           new(sync.Mutex),
 	}
 	return l, l.initialise()
 }
@@ -67,6 +74,9 @@ func (l *Reader) initialise() (err error) {
 }
 
 func (l *Reader) Open() (err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
 	cp, err := l.readerChk.GetCheckpoint()
 	if err != nil {
 		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
@@ -89,10 +99,46 @@ func (l *Reader) Open() (err error) {
 	})
 }
 
-func (l *Reader) Commit(idx uint64) error {
-	return l.readerChk.Commit(idx)
+func (l *Reader) OpenTicker(tickInMs time.Duration) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.isTicking {
+		return
+	}
+
+	l.isTicking = true
+	go func() {
+		logger.Log("ledger-open-ticker", "started ticking")
+		for l.isTicking {
+			select {
+			case <-timeout(tickInMs):
+				l.Open()
+			case <-l.closeCh:
+				return
+			}
+		}
+		logger.Log("ledger-open-ticker", "stopped ticking")
+	}()
+}
+
+func (l *Reader) Close() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.closeCh <- struct{}{}
+	l.isTicking = false
 }
 
 func buildWriteScanKey(prefix string) []byte {
 	return []byte(fmt.Sprintf("%s-write", prefix))
+}
+
+func timeout(timeoutInMs time.Duration) <-chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		time.Sleep(timeoutInMs * time.Millisecond)
+		ch <- struct{}{}
+	}()
+	return ch
 }

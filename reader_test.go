@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/stretchr/testify/assert"
@@ -106,6 +107,27 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 		r.Open()
 
 		assert.Equal(t, "third", out.String())
+	})
+}
+
+func TestLedgerOpenTicker(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		w, err := NewWriter("channel-1", db)
+		assert.Nil(t, err)
+
+		out := new(bytes.Buffer)
+		r, err := NewReader(w, "client-1", out)
+		assert.Nil(t, err)
+
+		r.OpenTicker(1000)
+		w.Write([]byte("first"))
+		w.Write([]byte("second"))
+
+		time.Sleep(500 * time.Millisecond)
+		assert.Equal(t, "", out.String())
+
+		time.Sleep(1000 * time.Millisecond)
+		assert.Equal(t, "firstsecond", out.String())
 	})
 }
 
