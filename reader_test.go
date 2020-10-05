@@ -147,8 +147,7 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 		for i := 0; i < int(3*opts.KeySpaceBatchSize); i++ {
 			w.Write([]byte("1"))
 		}
-
-		time.Sleep(30000 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 
 		assert.Equal(t, int(3*opts.KeySpaceBatchSize), len(out.Bytes()))
 	})
