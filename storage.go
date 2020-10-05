@@ -6,7 +6,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/dgraph-io/badger"
+	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/protobuf/proto"
 )
 
