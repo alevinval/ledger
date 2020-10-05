@@ -55,10 +55,10 @@ func (w *Writer) initialise() (err error) {
 }
 
 // Write a payload to the log, updates writer offset.
-func (l *Writer) Write(message []byte) (uint64, error) {
+func (w *Writer) Write(message []byte) (uint64, error) {
 	var idx uint64
 
-	idx, err := l.seq.Next()
+	idx, err := w.seq.Next()
 	if err != nil {
 		return 0, err
 	}
@@ -67,28 +67,27 @@ func (l *Writer) Write(message []byte) (uint64, error) {
 	// to represent offsets. Because less than zero cannot be represented, zero value
 	// is reserved to indicate a scan from earliest available offset.
 	if idx == 0 {
-		idx, err = l.seq.Next()
+		idx, err = w.seq.Next()
 		if err != nil {
 			return 0, err
 		}
 	}
 
-	key := buildWriteKey(l.basePrefix, idx)
-	logger.Log("writeKey", key)
+	key := buildWriteKey(w.basePrefix, idx)
 
-	err = l.db.PutBytes(key, message)
+	err = w.db.PutBytes(key, message)
 	if err != nil {
 		return 0, err
 	}
 
-	return idx, l.chk.Commit(idx)
+	return idx, w.chk.Commit(idx)
 }
 
 // Close the writer by releasing the sequence. Not releasing the sequence
 // leads to gaps in the number space. A gap that is big enough will break
 // the ledger since it relies on fast scans by assuming there are no gaps.
-func (l *Writer) Close() {
-	l.seq.Release()
+func (w *Writer) Close() {
+	w.seq.Release()
 }
 
 func buildWriteSeqKey(prefix string) []byte {
