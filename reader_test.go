@@ -30,6 +30,8 @@ func TestLedgerWriteAndRead(t *testing.T) {
 		runTest(func(db *badger.DB) {
 			w, err := NewWriterOpts("channel-1", db, opts)
 			assert.Nil(t, err)
+			defer w.Close()
+
 			w.Write([]byte("zero"))
 			w.Write([]byte("first"))
 
@@ -55,6 +57,8 @@ func TestLedgerModeEarliest(t *testing.T) {
 	runTest(func(db *badger.DB) {
 		w, err := NewWriter("channel-1", db)
 		assert.Nil(t, err)
+		defer w.Close()
+
 		w.Write([]byte("first"))
 		w.Write([]byte("second"))
 
@@ -74,6 +78,8 @@ func TestLedgerModeCustom(t *testing.T) {
 	runTest(func(db *badger.DB) {
 		w, err := NewWriter("channel-1", db)
 		assert.Nil(t, err)
+		defer w.Close()
+
 		w.Write([]byte("first"))
 		w.Write([]byte("second"))
 
@@ -93,6 +99,8 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 	runTest(func(db *badger.DB) {
 		w, err := NewWriter("channel-1", db)
 		assert.Nil(t, err)
+		defer w.Close()
+
 		w.Write([]byte("first"))
 		w.Write([]byte("second"))
 
@@ -114,6 +122,7 @@ func TestLedgerOpenTicker(t *testing.T) {
 	runTest(func(db *badger.DB) {
 		w, err := NewWriter("channel-1", db)
 		assert.Nil(t, err)
+		defer w.Close()
 
 		out := new(bytes.Buffer)
 		r, err := NewReader(w, "client-1", out)
@@ -121,6 +130,7 @@ func TestLedgerOpenTicker(t *testing.T) {
 
 		w.Write([]byte("first"))
 		r.OpenTicker(400)
+		defer r.CloseTicker()
 		assert.Equal(t, "first", out.String())
 
 		time.Sleep(300 * time.Millisecond)
@@ -136,12 +146,14 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 	runTest(func(db *badger.DB) {
 		w, err := NewWriter("channel-1", db)
 		assert.Nil(t, err)
+		defer w.Close()
 
 		out := new(bytes.Buffer)
 		r, err := NewReader(w, "client-1", out)
 		assert.Nil(t, err)
 
 		r.OpenTicker(100)
+		defer r.CloseTicker()
 
 		opts := DefaultOptions()
 		for i := 0; i < int(3*opts.KeySpaceBatchSize); i++ {

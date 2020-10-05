@@ -123,7 +123,7 @@ func (l *Reader) OpenTicker(tickInMs time.Duration) {
 	}()
 }
 
-func (l *Reader) Close() {
+func (l *Reader) CloseTicker() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
