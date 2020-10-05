@@ -7,6 +7,11 @@ import (
 	"github.com/dgraph-io/badger/v2"
 )
 
+// Writer knows how to store messages in the ledger, it performs
+// indexed insertions and keeps track of the index of the latest
+// message that has been written. Indexed insertions are possible
+// using a BadgerDB Sequence which yields monotonically increasing
+// integers.
 type Writer struct {
 	id         string
 	basePrefix string
@@ -15,11 +20,12 @@ type Writer struct {
 	seq        *badger.Sequence
 }
 
+// NewWriter creates a default ledger writer
 func NewWriter(id string, db *badger.DB) (*Writer, error) {
 	return NewWriterOpts(id, db, DefaultOptions())
 }
 
-// NewWriterledger creation
+// NewWriterOpts creates a customised ledger Writer
 func NewWriterOpts(id string, db *badger.DB, opts *Options) (*Writer, error) {
 	basePrefix := fmt.Sprintf("ledger-%s", id)
 	logger.Log("writer-prefix", basePrefix)
