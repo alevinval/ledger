@@ -83,10 +83,14 @@ func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k 
 
 			isEmptySeek := true
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				k := it.Item().KeyCopy(nil)
-				idx, _ := strconv.ParseUint(string(bytes.TrimPrefix(k, prefix)), 10, 64)
+				key := it.Item().KeyCopy(nil)
+				keyIdx := bytes.TrimPrefix(key, basePrefix)
+				idx, err := strconv.ParseUint(string(keyIdx), 10, 64)
+				if err != nil {
+					continue
+				}
 				if idx > startIdx {
-					err := cb(k, idx)
+					err := cb(key, idx)
 					if err != nil {
 						return err
 					}
@@ -126,5 +130,5 @@ func getKeySpaceScanFmt(opts *Options) string {
 	if batchDigits == 0 {
 		batchDigits = 1
 	}
-	return "%s-%0." + strconv.Itoa(uintDigits-batchDigits) + "d"
+	return "%s%0." + strconv.Itoa(uintDigits-batchDigits) + "d"
 }

@@ -134,7 +134,7 @@ func (l *Reader) Close() {
 }
 
 func buildWriteScanKey(prefix string) []byte {
-	return []byte(fmt.Sprintf("%s-write", prefix))
+	return []byte(fmt.Sprintf("%s-write-", prefix))
 }
 
 func timeout(timeoutInMs time.Duration) <-chan struct{} {

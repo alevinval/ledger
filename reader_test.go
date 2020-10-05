@@ -132,6 +132,28 @@ func TestLedgerOpenTicker(t *testing.T) {
 	})
 }
 
+func TestLedgerMoreThanOneBatchSize(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		w, err := NewWriter("channel-1", db)
+		assert.Nil(t, err)
+
+		out := new(bytes.Buffer)
+		r, err := NewReader(w, "client-1", out)
+		assert.Nil(t, err)
+
+		r.OpenTicker(100)
+
+		opts := DefaultOptions()
+		for i := 0; i < int(3*opts.KeySpaceBatchSize); i++ {
+			w.Write([]byte("1"))
+		}
+
+		time.Sleep(30000 * time.Millisecond)
+
+		assert.Equal(t, int(3*opts.KeySpaceBatchSize), len(out.Bytes()))
+	})
+}
+
 func openBadgerDB() (*badger.DB, error) {
 	tmpPath := os.TempDir()
 	storePath := path.Join(tmpPath, "test-badger.db")
@@ -150,6 +172,7 @@ func openBadgerDB() (*badger.DB, error) {
 func runTest(fn func(db *badger.DB)) {
 	db, err := openBadgerDB()
 	defer db.Close()
+
 	if err != nil {
 		log.Fatalf("cannot open badger db: %s", err)
 	}
