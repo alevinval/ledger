@@ -115,8 +115,8 @@ func (s *storage) buildKeySpace(prefix []byte, startIdx uint64) <-chan []byte {
 		keySpaceFmt := getKeySpaceScanFmt(s.opts)
 		for n := startIdx / s.opts.KeySpaceBatchSize; n < maxIdx; n++ {
 			prefix := fmt.Sprintf(keySpaceFmt, prefix, n)
-			logger.Log("generatedKey", prefix)
 			out <- []byte(prefix)
+			logger.Log("storage", "buildKeySpace", "generatedKey", prefix)
 		}
 	}()
 	return out

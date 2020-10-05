@@ -85,7 +85,6 @@ func (l *Reader) Open() (err error) {
 	startIdx := cp.Index
 	logger.Log("ledger-open", "scanning", "prefix", l.writeScanKey, "startIdx", startIdx)
 	return l.db.ScanKeysIndexed(l.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
-		logger.Log("ledger-open", "replaying", "key", k)
 		value, err := l.db.GetBytes(k)
 		if err != nil {
 			return
