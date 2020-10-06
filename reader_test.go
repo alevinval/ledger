@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -14,18 +13,21 @@ import (
 
 func TestLedgerWriteAndRead(t *testing.T) {
 	options := []*Options{
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 10},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 100},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 150},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 1000},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 1250},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 5},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 50},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 347},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 500},
-		{Mode: ModeLatest, SequenceBandwidth: 1000, BatchSize: 5000},
+		{SequenceBandwidth: 1000, BatchSize: 10},
+		{SequenceBandwidth: 1000, BatchSize: 100},
+		{SequenceBandwidth: 1000, BatchSize: 150},
+		{SequenceBandwidth: 1000, BatchSize: 1000},
+		{SequenceBandwidth: 1000, BatchSize: 1250},
+		{SequenceBandwidth: 1000, BatchSize: 5},
+		{SequenceBandwidth: 1000, BatchSize: 50},
+		{SequenceBandwidth: 1000, BatchSize: 347},
+		{SequenceBandwidth: 1000, BatchSize: 500},
+		{SequenceBandwidth: 1000, BatchSize: 5000},
 	}
 	for _, opts := range options {
+		opts.Mode = ModeLatest
+		opts.FetchIntervalMs = 100
+
 		t.Logf("running test with options: %v", opts)
 		runTest(func(db *badger.DB) {
 			w, err := NewWriterOpts("channel-1", db, opts)
@@ -37,13 +39,20 @@ func TestLedgerWriteAndRead(t *testing.T) {
 
 			r, err := NewReaderOpts(w, "client-1", opts)
 			assert.Nil(t, err)
+			defer r.Close()
+
+			time.Sleep(2 * time.Duration(opts.FetchIntervalMs) * time.Millisecond)
+
 			w.Write([]byte("second"))
 			w.Write([]byte("third"))
-			assertReads(t, r, "second", "third", "")
 
-			r, err = NewReaderOpts(w, "client-1", opts)
+			time.Sleep(150 * time.Millisecond)
+			assertReads(t, r, "second", "third")
+
+			r2, err := NewReaderOpts(w, "client-1", opts)
 			assert.Nil(t, err)
-			assertReads(t, r, "")
+			defer r2.Close()
+			assertReads(t, r2, "")
 		})
 
 	}
@@ -62,6 +71,7 @@ func TestLedgerModeEarliest(t *testing.T) {
 		opts.Mode = ModeEarliest
 		r, err := NewReaderOpts(w, "client-1", opts)
 		assert.Nil(t, err)
+		defer r.Close()
 		w.Write([]byte("third"))
 		assertReads(t, r, "first", "second", "third")
 	})
@@ -81,6 +91,7 @@ func TestLedgerModeCustom(t *testing.T) {
 		opts.CustomIndex = 1
 		r, err := NewReaderOpts(w, "client-1", opts)
 		assert.Nil(t, err)
+		defer r.Close()
 		assertReads(t, r, "second")
 	})
 }
@@ -99,6 +110,7 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 		opts.CustomIndex = 10
 		r, err := NewReaderOpts(w, "client-1", opts)
 		assert.Nil(t, err)
+		defer r.Close()
 
 		w.Write([]byte("third"))
 
@@ -114,6 +126,7 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 
 		r, err := NewReader(w, "client-1")
 		assert.Nil(t, err)
+		defer r.Close()
 
 		opts := DefaultOptions()
 		for i := 0; i < int(3*opts.BatchSize); i++ {
@@ -123,12 +136,9 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 
 		total := ""
 		for i := 0; i < int(3*opts.BatchSize); i++ {
-			s, _ := ioutil.ReadAll(r)
-			total += string(s)
+			s := <-r.Read()
+			total += string(s.Data)
 		}
-
-		s, _ := ioutil.ReadAll(r)
-		assert.Equal(t, "", string(s))
 
 		assert.Equal(t, int(3*opts.BatchSize), len(total))
 	})
@@ -136,8 +146,14 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 
 func assertReads(t *testing.T, r *Reader, expected ...string) {
 	for i := range expected {
-		actual, _ := ioutil.ReadAll(r)
-		assert.Equal(t, expected[i], string(actual))
+		select {
+		case actual := <-r.Read():
+			assert.Equal(t, expected[i], string(actual.Data))
+		case <-time.After(100 * time.Millisecond):
+			if expected[i] != "" {
+				assert.FailNowf(t, "missing-read", "expected %q, instead read timeout", expected[i])
+			}
+		}
 	}
 }
 

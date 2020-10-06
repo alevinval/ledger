@@ -3,9 +3,8 @@ package ledger
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"sync"
+	"time"
 
 	"github.com/go-kit/kit/log"
 )
@@ -21,25 +20,19 @@ func init() {
 
 type (
 	Reader struct {
-		id                string
-		isTicking         bool
-		writeScanKey      []byte
-		currentMessageIdx int
-		currentMessage    *message
-		messagePool       []message
-		opts              *Options
-		db                *storage
-		readerChk         *checkpoint
-		writerChk         *checkpoint
-		closeCh           chan struct{}
-		closedCh          chan struct{}
-		mu                *sync.Mutex
+		writeScanKey []byte
+		isClosed     bool
+		messages     chan *Message
+		opts         *Options
+		db           *storage
+		readerChk    *checkpoint
+		writerChk    *checkpoint
 	}
 
-	// intermediate structure used to buffer reads
-	message struct {
-		idx  uint64
-		data []byte
+	// Message structure used to represent read results
+	Message struct {
+		Index uint64
+		Data  []byte
 	}
 )
 
@@ -53,17 +46,12 @@ func NewReaderOpts(w *Writer, id string, opts *Options) (*Reader, error) {
 	basePrefix := fmt.Sprintf("ledger-%s-reader-%s", w.id, id)
 	logger.Log("reader-prefix", basePrefix)
 	l := &Reader{
-		id:                id,
-		writeScanKey:      buildWriteScanKey(w.basePrefix),
-		readerChk:         newCheckpoint(basePrefix, w.db, opts),
-		writerChk:         w.chk,
-		currentMessageIdx: 0,
-		messagePool:       make([]message, 0),
-		opts:              opts,
-		db:                w.db,
-		closeCh:           make(chan struct{}),
-		closedCh:          make(chan struct{}),
-		mu:                new(sync.Mutex),
+		writeScanKey: buildWriteScanKey(w.basePrefix),
+		readerChk:    newCheckpoint(basePrefix, w.db, opts),
+		writerChk:    w.chk,
+		messages:     make(chan *Message),
+		opts:         opts,
+		db:           w.db,
 	}
 	return l, l.initialise()
 }
@@ -84,45 +72,48 @@ func (r *Reader) initialise() (err error) {
 			logger.Log("ledger-initialise", "cannot create starting checkpoint")
 		}
 	}
+	if err == nil {
+		go r.fetcher(r.opts.FetchIntervalMs)
+	}
 	return
 }
 
-func (r *Reader) Read(out []byte) (n int, err error) {
-	if r.currentMessage == nil {
-		if r.currentMessageIdx >= len(r.messagePool) {
-			r.currentMessageIdx = 0
-			r.messagePool, err = r.fetch()
-			if err != nil {
-				return 0, err
-			}
-			if len(r.messagePool) == 0 {
-				return 0, io.EOF
-			}
-		}
-		r.currentMessage = &r.messagePool[r.currentMessageIdx]
-		r.currentMessageIdx++
-	}
-
-	if len(out) < len(r.currentMessage.data) {
-		return 0, io.ErrShortBuffer
-	}
-
-	var l = len(r.currentMessage.data)
-	copy(out, r.currentMessage.data)
-	r.readerChk.Commit(r.currentMessage.idx)
-
-	r.currentMessage = nil
-	return l, io.EOF
+func (r *Reader) Read() <-chan *Message {
+	return r.messages
 }
 
-func (r *Reader) fetch() ([]message, error) {
+func (r *Reader) Close() {
+	r.isClosed = true
+}
+
+func (r *Reader) fetcher(emptyFetchIntervalMs int) {
+	for !r.isClosed {
+		results, err := r.fetch()
+		if err != nil {
+			logger.Log("ledger-fetch", "error fetching", "error", err)
+			time.Sleep(time.Duration(emptyFetchIntervalMs) * time.Millisecond)
+			continue
+		}
+		if len(results) == 0 {
+			logger.Log("ledger-fetch", "empty fetch")
+			time.Sleep(time.Duration(emptyFetchIntervalMs) * time.Millisecond)
+			continue
+		}
+		for i := range results {
+			r.messages <- results[i]
+			r.readerChk.Commit(results[i].Index)
+		}
+	}
+}
+
+func (r *Reader) fetch() ([]*Message, error) {
 	cp, err := r.readerChk.GetCheckpoint()
 	if err != nil {
 		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
 		return nil, err
 	}
 
-	results := make([]message, 0, r.opts.BatchSize)
+	results := make([]*Message, 0, r.opts.BatchSize)
 	startIdx := cp.Index
 	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startIdx", startIdx)
 	err = r.db.ScanKeysIndexed(r.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
@@ -135,7 +126,7 @@ func (r *Reader) fetch() ([]message, error) {
 			return
 		}
 
-		results = append(results, message{idx, value})
+		results = append(results, &Message{idx, value})
 		return
 	})
 	if err == errFullPool {

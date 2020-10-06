@@ -12,6 +12,7 @@ type (
 		Mode              OptionMode
 		CustomIndex       uint64
 		SequenceBandwidth uint64
+		FetchIntervalMs   int
 
 		// BatchSize is used for two things:
 		// - Determine the size of the intermediate buffer from which messages are read
@@ -28,6 +29,7 @@ func DefaultOptions() *Options {
 	return &Options{
 		Mode:              ModeLatest,
 		SequenceBandwidth: 1000,
+		FetchIntervalMs:   100,
 		BatchSize:         1000,
 	}
 }
