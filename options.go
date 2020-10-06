@@ -13,10 +13,11 @@ type (
 		CustomIndex       uint64
 		SequenceBandwidth uint64
 
-		// KeySpaceBatchSize must be apower of ten (10, 100, 1000, 10000 ...)
-		// When set to something else, the number of digits will determine which
-		// power is used.
-		KeySpaceBatchSize uint64
+		// BatchSize is used for two things:
+		// - Determine the size of the intermediate buffer from which messages are read
+		// - Determine the key space that is generated for efficiently scanning the kv store.
+		// For the latter, the number of digits will be used to determine a power of ten (10, 100, 1000, ...)
+		BatchSize uint64
 	}
 
 	// OptionMode to determine how the initial checkpoint will be created
@@ -27,6 +28,6 @@ func DefaultOptions() *Options {
 	return &Options{
 		Mode:              ModeLatest,
 		SequenceBandwidth: 1000,
-		KeySpaceBatchSize: 1000,
+		BatchSize:         1000,
 	}
 }

@@ -1,16 +1,19 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/go-kit/kit/log"
 )
 
-var logger log.Logger
+var (
+	logger      log.Logger
+	errFullPool = errors.New("results pool is full")
+)
 
 func init() {
 	logger = log.NewLogfmtLogger(os.Stdout)
@@ -18,129 +21,129 @@ func init() {
 
 type (
 	Reader struct {
-		id           string
-		isTicking    bool
-		writeScanKey []byte
-		out          io.Writer
-		opts         *Options
-		db           *storage
-		readerChk    *checkpoint
-		writerChk    *checkpoint
-		closeCh      chan struct{}
-		closedCh     chan struct{}
-		mu           *sync.Mutex
+		id                string
+		isTicking         bool
+		writeScanKey      []byte
+		currentMessageIdx int
+		currentMessage    *message
+		messagePool       []message
+		opts              *Options
+		db                *storage
+		readerChk         *checkpoint
+		writerChk         *checkpoint
+		closeCh           chan struct{}
+		closedCh          chan struct{}
+		mu                *sync.Mutex
+	}
+
+	// intermediate structure used to buffer reads
+	message struct {
+		idx  uint64
+		data []byte
 	}
 )
 
 // NewReader ledger
-func NewReader(w *Writer, id string, out io.Writer) (*Reader, error) {
-	return NewReaderOpts(w, id, out, DefaultOptions())
+func NewReader(w *Writer, id string) (*Reader, error) {
+	return NewReaderOpts(w, id, DefaultOptions())
 }
 
 // NewReaderOpts ledger
-func NewReaderOpts(w *Writer, id string, out io.Writer, opts *Options) (*Reader, error) {
+func NewReaderOpts(w *Writer, id string, opts *Options) (*Reader, error) {
 	basePrefix := fmt.Sprintf("ledger-%s-reader-%s", w.id, id)
 	logger.Log("reader-prefix", basePrefix)
 	l := &Reader{
-		id:           id,
-		writeScanKey: buildWriteScanKey(w.basePrefix),
-		readerChk:    newCheckpoint(basePrefix, w.db, opts),
-		writerChk:    w.chk,
-		out:          out,
-		opts:         opts,
-		db:           w.db,
-		closeCh:      make(chan struct{}),
-		closedCh:     make(chan struct{}),
-		mu:           new(sync.Mutex),
+		id:                id,
+		writeScanKey:      buildWriteScanKey(w.basePrefix),
+		readerChk:         newCheckpoint(basePrefix, w.db, opts),
+		writerChk:         w.chk,
+		currentMessageIdx: 0,
+		messagePool:       make([]message, 0),
+		opts:              opts,
+		db:                w.db,
+		closeCh:           make(chan struct{}),
+		closedCh:          make(chan struct{}),
+		mu:                new(sync.Mutex),
 	}
 	return l, l.initialise()
 }
 
-func (l *Reader) initialise() (err error) {
+func (r *Reader) initialise() (err error) {
 	// Ensure a checkpoint exists before anything else
-	_, notFoundErr := l.readerChk.GetCheckpoint()
+	_, notFoundErr := r.readerChk.GetCheckpoint()
 	if notFoundErr != nil {
 
 		// In this case, figure out which offset should be committed
 		// based on the configured options (custom, earliest, latest...)
-		cp, err := l.readerChk.GetCheckpointFrom(l.writerChk)
+		cp, err := r.readerChk.GetCheckpointFrom(r.writerChk)
 		if err == nil {
-			err = l.readerChk.Commit(cp.Index)
+			err = r.readerChk.Commit(cp.Index)
 		} else {
 			// This should never happen, if it does the underlying storage
 			// may have issues
-			logger.Log("error", "cannot create starting checkpoint")
+			logger.Log("ledger-initialise", "cannot create starting checkpoint")
 		}
 	}
 	return
 }
 
-func (l *Reader) Open() (err error) {
-	cp, err := l.readerChk.GetCheckpoint()
-	if err != nil {
-		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
-		return
-	}
-
-	startIdx := cp.Index
-	logger.Log("ledger-open", "scanning", "prefix", l.writeScanKey, "startIdx", startIdx)
-	return l.db.ScanKeysIndexed(l.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
-		value, err := l.db.GetBytes(k)
-		if err != nil {
-			return
-		}
-		_, err = l.out.Write(value)
-		if err != nil {
-			return
-		}
-		return l.readerChk.Commit(idx)
-	})
-}
-
-func (l *Reader) OpenTicker(tickInMs time.Duration) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	if l.isTicking {
-		return
-	}
-
-	l.isTicking = true
-	l.Open()
-	go func() {
-		logger.Log("ledger-open-ticker", "started ticking")
-		for {
-			select {
-			case <-timeout(tickInMs):
-				l.Open()
-			case <-l.closeCh:
-				logger.Log("ledger-open-ticker", "stopped ticking")
-				l.closedCh <- struct{}{}
-				return
+func (r *Reader) Read(out []byte) (n int, err error) {
+	if r.currentMessage == nil {
+		if r.currentMessageIdx >= len(r.messagePool) {
+			r.currentMessageIdx = 0
+			r.messagePool, err = r.fetch()
+			if err != nil {
+				return 0, err
+			}
+			if len(r.messagePool) == 0 {
+				return 0, io.EOF
 			}
 		}
-	}()
+		r.currentMessage = &r.messagePool[r.currentMessageIdx]
+		r.currentMessageIdx++
+	}
+
+	if len(out) < len(r.currentMessage.data) {
+		return 0, io.ErrShortBuffer
+	}
+
+	var l = len(r.currentMessage.data)
+	copy(out, r.currentMessage.data)
+	r.readerChk.Commit(r.currentMessage.idx)
+
+	r.currentMessage = nil
+	return l, io.EOF
 }
 
-func (l *Reader) CloseTicker() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+func (r *Reader) fetch() ([]message, error) {
+	cp, err := r.readerChk.GetCheckpoint()
+	if err != nil {
+		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
+		return nil, err
+	}
 
-	logger.Log("ledger-close", "ledger being closed")
-	l.closeCh <- struct{}{}
-	<-l.closedCh
-	l.isTicking = false
+	results := make([]message, 0, r.opts.BatchSize)
+	startIdx := cp.Index
+	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startIdx", startIdx)
+	err = r.db.ScanKeysIndexed(r.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
+		if len(results) >= cap(results) {
+			return errFullPool
+		}
+
+		value, err := r.db.GetBytes(k)
+		if err != nil {
+			return
+		}
+
+		results = append(results, message{idx, value})
+		return
+	})
+	if err == errFullPool {
+		return results, nil
+	}
+	return results, err
 }
 
 func buildWriteScanKey(prefix string) []byte {
 	return []byte(fmt.Sprintf("%s-write-", prefix))
-}
-
-func timeout(timeoutInMs time.Duration) <-chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		time.Sleep(timeoutInMs * time.Millisecond)
-		ch <- struct{}{}
-	}()
-	return ch
 }

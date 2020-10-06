@@ -113,7 +113,7 @@ func (s *storage) buildKeySpace(prefix []byte, startIdx uint64) <-chan []byte {
 	out := make(chan []byte)
 	go func() {
 		keySpaceFmt := getKeySpaceScanFmt(s.opts)
-		for n := startIdx / s.opts.KeySpaceBatchSize; n < maxIdx; n++ {
+		for n := startIdx / s.opts.BatchSize; n < maxIdx; n++ {
 			prefix := fmt.Sprintf(keySpaceFmt, prefix, n)
 			out <- []byte(prefix)
 			logger.Log("storage", "buildKeySpace", "generatedKey", prefix)
@@ -124,7 +124,7 @@ func (s *storage) buildKeySpace(prefix []byte, startIdx uint64) <-chan []byte {
 
 func getKeySpaceScanFmt(opts *Options) string {
 	batchDigits := 0
-	for i := opts.KeySpaceBatchSize; i >= 10; i /= 10 {
+	for i := opts.BatchSize; i >= 10; i /= 10 {
 		batchDigits++
 	}
 	if batchDigits == 0 {
