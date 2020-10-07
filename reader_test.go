@@ -37,7 +37,7 @@ func TestLedgerWriteAndRead(t *testing.T) {
 			w.Write([]byte("zero"))
 			w.Write([]byte("first"))
 
-			r, err := NewReaderOpts(w, "client-1", opts)
+			r, err := w.NewReader("client-1")
 			assert.Nil(t, err)
 			defer r.Close()
 
@@ -49,7 +49,7 @@ func TestLedgerWriteAndRead(t *testing.T) {
 			time.Sleep(150 * time.Millisecond)
 			assertReads(t, r, "second", "third")
 
-			r2, err := NewReaderOpts(w, "client-1", opts)
+			r2, err := w.NewReader("client-1")
 			assert.Nil(t, err)
 			defer r2.Close()
 			assertReads(t, r2, "")
@@ -69,7 +69,7 @@ func TestLedgerModeEarliest(t *testing.T) {
 
 		opts := DefaultOptions()
 		opts.Mode = ModeEarliest
-		r, err := NewReaderOpts(w, "client-1", opts)
+		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
 		w.Write([]byte("third"))
@@ -89,7 +89,7 @@ func TestLedgerModeCustom(t *testing.T) {
 		opts := DefaultOptions()
 		opts.Mode = ModeCustom
 		opts.CustomIndex = 1
-		r, err := NewReaderOpts(w, "client-1", opts)
+		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
 		assertReads(t, r, "second")
@@ -108,7 +108,7 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 		opts := DefaultOptions()
 		opts.Mode = ModeCustom
 		opts.CustomIndex = 10
-		r, err := NewReaderOpts(w, "client-1", opts)
+		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
 
@@ -124,7 +124,7 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 		assert.Nil(t, err)
 		defer w.Close()
 
-		r, err := NewReader(w, "client-1")
+		r, err := w.NewReader("client-1")
 		assert.Nil(t, err)
 		defer r.Close()
 

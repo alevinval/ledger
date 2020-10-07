@@ -36,13 +36,13 @@ type (
 	}
 )
 
-// NewReader ledger
-func NewReader(w *Writer, id string) (*Reader, error) {
-	return NewReaderOpts(w, id, DefaultOptions())
+// NewReader creates a default ledger reader
+func (w *Writer) NewReader(id string) (*Reader, error) {
+	return w.NewReaderOpts(id, DefaultOptions())
 }
 
-// NewReaderOpts ledger
-func NewReaderOpts(w *Writer, id string, opts *Options) (*Reader, error) {
+// NewReaderOpts creates a customized ledger reader
+func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 	basePrefix := fmt.Sprintf("ledger-%s-reader-%s", w.id, id)
 	logger.Log("reader-prefix", basePrefix)
 	l := &Reader{
