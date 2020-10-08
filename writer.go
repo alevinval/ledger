@@ -13,11 +13,16 @@ import (
 // using a BadgerDB Sequence which yields monotonically increasing
 // integers.
 type Writer struct {
-	id         string
-	basePrefix string
-	chk        *checkpoint
-	db         *storage
-	seq        *badger.Sequence
+	id                       string
+	basePrefix               string
+	isClosed                 bool
+	chk                      *checkpoint
+	db                       *storage
+	seq                      *badger.Sequence
+	readers                  map[string]*Reader
+	newReaderNotification    chan *Reader
+	closedReaderNotification chan *Reader
+	newWriteNotification     chan struct{}
 }
 
 // NewWriter creates a default ledger writer
@@ -35,15 +40,19 @@ func NewWriterOpts(id string, db *badger.DB, opts *Options) (*Writer, error) {
 	}
 
 	s := &storage{db, opts}
-	l := &Writer{
-		id:         id,
-		basePrefix: basePrefix,
-		chk:        newCheckpoint(basePrefix, s, opts),
-		db:         s,
-		seq:        seq,
+	w := &Writer{
+		id:                       id,
+		basePrefix:               basePrefix,
+		chk:                      newCheckpoint(basePrefix, s, opts),
+		db:                       s,
+		seq:                      seq,
+		newReaderNotification:    make(chan *Reader),
+		closedReaderNotification: make(chan *Reader),
+		newWriteNotification:     make(chan struct{}),
+		readers:                  map[string]*Reader{},
 	}
 
-	return l, l.initialise()
+	return w, w.initialise()
 }
 
 func (w *Writer) initialise() (err error) {
@@ -51,6 +60,7 @@ func (w *Writer) initialise() (err error) {
 	if notFoundErr != nil {
 		err = w.chk.Commit(0)
 	}
+	go w.readerManager()
 	return
 }
 
@@ -80,13 +90,43 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 		return 0, err
 	}
 
+	select {
+	case w.newWriteNotification <- struct{}{}:
+	default:
+	}
 	return idx, w.chk.Commit(idx)
+}
+
+func (w *Writer) readerManager() {
+	for !w.isClosed {
+		select {
+		case r := <-w.newReaderNotification:
+			// If the reader ID is already tracked, close the tracked reader
+			// and replace it for the new instance.
+			ret, ok := w.readers[r.id]
+			if ok {
+				// Launch as a go-routine so it can notify us from the closure
+				go ret.Close()
+			}
+			w.readers[r.id] = r
+		case r := <-w.closedReaderNotification:
+			delete(w.readers, r.id)
+		case <-w.newWriteNotification:
+			for _, r := range w.readers {
+				select {
+				case r.writeNotification <- struct{}{}:
+				default:
+				}
+			}
+		}
+	}
 }
 
 // Close the writer by releasing the sequence. Not releasing the sequence
 // leads to gaps in the number space. A gap that is big enough will break
 // the ledger since it relies on fast scans by assuming there are no gaps.
 func (w *Writer) Close() {
+	w.isClosed = true
 	w.seq.Release()
 }
 

@@ -13,20 +13,20 @@ import (
 
 func TestLedgerWriteAndRead(t *testing.T) {
 	options := []*Options{
-		{SequenceBandwidth: 1000, BatchSize: 10},
-		{SequenceBandwidth: 1000, BatchSize: 100},
-		{SequenceBandwidth: 1000, BatchSize: 150},
-		{SequenceBandwidth: 1000, BatchSize: 1000},
-		{SequenceBandwidth: 1000, BatchSize: 1250},
-		{SequenceBandwidth: 1000, BatchSize: 5},
-		{SequenceBandwidth: 1000, BatchSize: 50},
-		{SequenceBandwidth: 1000, BatchSize: 347},
-		{SequenceBandwidth: 1000, BatchSize: 500},
-		{SequenceBandwidth: 1000, BatchSize: 5000},
+		{BatchSize: 10},
+		{BatchSize: 100},
+		{BatchSize: 150},
+		{BatchSize: 1000},
+		{BatchSize: 1250},
+		{BatchSize: 5},
+		{BatchSize: 50},
+		{BatchSize: 347},
+		{BatchSize: 500},
+		{BatchSize: 5000},
 	}
 	for _, opts := range options {
+		opts.SequenceBandwidth = 1000
 		opts.Mode = ModeLatest
-		opts.FetchIntervalMs = 100
 
 		t.Logf("running test with options: %v", opts)
 		runTest(func(db *badger.DB) {
@@ -40,8 +40,6 @@ func TestLedgerWriteAndRead(t *testing.T) {
 			r, err := w.NewReader("client-1")
 			assert.Nil(t, err)
 			defer r.Close()
-
-			time.Sleep(2 * time.Duration(opts.FetchIntervalMs) * time.Millisecond)
 
 			w.Write([]byte("second"))
 			w.Write([]byte("third"))
@@ -120,19 +118,19 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 
 func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 	runTest(func(db *badger.DB) {
-		w, err := NewWriter("channel-1", db)
+		opts := DefaultOptions()
+		opts.BatchSize = 10
+		w, err := NewWriterOpts("channel-1", db, opts)
 		assert.Nil(t, err)
 		defer w.Close()
 
-		r, err := w.NewReader("client-1")
+		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
 
-		opts := DefaultOptions()
 		for i := 0; i < int(3*opts.BatchSize); i++ {
 			w.Write([]byte("1"))
 		}
-		time.Sleep(200 * time.Millisecond)
 
 		total := ""
 		for i := 0; i < int(3*opts.BatchSize); i++ {
