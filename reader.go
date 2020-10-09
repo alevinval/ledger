@@ -3,7 +3,9 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"sync"
 
 	"github.com/go-kit/kit/log"
 )
@@ -19,16 +21,17 @@ func init() {
 
 type (
 	Reader struct {
-		id                string
-		writeScanKey      []byte
-		isClosed          bool
-		messages          chan *Message
-		opts              *Options
-		db                *storage
-		readerChk         *checkpoint
-		writerChk         *checkpoint
-		writeNotification chan struct{}
-		closeNotification chan *Reader
+		id                 string
+		writeScanKey       []byte
+		isClosed           bool
+		messages           chan *Message
+		opts               *Options
+		chk                *checkpoint
+		w                  *Writer
+		triggerFetch       chan struct{}
+		fetcherClose       chan struct{}
+		fetcherCloseNotify chan struct{}
+		mu                 sync.RWMutex
 	}
 
 	// Message structure used to represent read results
@@ -45,36 +48,40 @@ func (w *Writer) NewReader(id string) (*Reader, error) {
 
 // NewReaderOpts creates a customized ledger reader
 func (w *Writer) NewReaderOpts(id string, opts *Options) (r *Reader, err error) {
+	if w.isClosed {
+		return nil, io.ErrClosedPipe
+	}
+
 	basePrefix := fmt.Sprintf("ledger-%s-reader-%s", w.id, id)
 	logger.Log("reader-prefix", basePrefix)
 	r = &Reader{
-		id:                id,
-		writeScanKey:      buildWriteScanKey(w.basePrefix),
-		readerChk:         newCheckpoint(basePrefix, w.db, opts),
-		writerChk:         w.chk,
-		messages:          make(chan *Message),
-		opts:              opts,
-		db:                w.db,
-		writeNotification: make(chan struct{}, 1),
-		closeNotification: w.closedReaderNotification,
+		id:                 id,
+		writeScanKey:       buildWriteScanKey(w.basePrefix),
+		chk:                newCheckpoint(basePrefix, w.db, opts),
+		messages:           make(chan *Message),
+		opts:               opts,
+		w:                  w,
+		triggerFetch:       make(chan struct{}),
+		fetcherClose:       make(chan struct{}),
+		fetcherCloseNotify: make(chan struct{}),
 	}
 	err = r.initialise()
 	if err == nil {
-		w.newReaderNotification <- r
+		w.newReader <- r
 	}
 	return
 }
 
 func (r *Reader) initialise() (err error) {
 	// Ensure a checkpoint exists before anything else
-	_, notFoundErr := r.readerChk.GetCheckpoint()
+	_, notFoundErr := r.chk.GetCheckpoint()
 	if notFoundErr != nil {
 
 		// In this case, figure out which offset should be committed
 		// based on the configured options (custom, earliest, latest...)
-		cp, err := r.readerChk.GetCheckpointFrom(r.writerChk)
+		cp, err := r.chk.GetCheckpointFrom(r.w.chk)
 		if err == nil {
-			err = r.readerChk.Commit(cp.Index)
+			err = r.chk.Commit(cp.Index)
 		} else {
 			// This should never happen, if it does the underlying storage
 			// may have issues
@@ -83,9 +90,7 @@ func (r *Reader) initialise() (err error) {
 	}
 	if err == nil {
 		go r.fetcher()
-
-		// Queue a write notification to ensure there is an initial fetch
-		r.writeNotification <- struct{}{}
+		r.doTriggerFetch()
 	}
 	return
 }
@@ -95,21 +100,32 @@ func (r *Reader) Read() <-chan *Message {
 }
 
 func (r *Reader) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.isClosed {
+		return
+	}
+
 	r.isClosed = true
-	r.closeNotification <- r
+	r.fetcherClose <- struct{}{}
+	<-r.fetcherCloseNotify
 }
 
-func (r *Reader) fetcher() {
-	for !r.isClosed {
-		select {
-		case <-r.writeNotification:
-			r.fetch()
-		}
+func (r *Reader) doTriggerFetch() bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.isClosed {
+		return true
 	}
+
+	r.triggerFetch <- struct{}{}
+	return false
 }
 
 func (r *Reader) fetch() {
-	cp, err := r.readerChk.GetCheckpoint()
+	cp, err := r.chk.GetCheckpoint()
 	if err != nil {
 		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
 		return
@@ -117,16 +133,28 @@ func (r *Reader) fetch() {
 
 	startIdx := cp.Index
 	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startIdx", startIdx)
-	err = r.db.ScanKeysIndexed(r.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
-		value, err := r.db.GetBytes(k)
+	err = r.w.db.ScanKeysIndexed(r.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
+		value, err := r.w.db.GetBytes(k)
 		if err != nil {
 			return
 		}
 
 		r.messages <- &Message{idx, value}
-		r.readerChk.Commit(idx)
+		r.chk.Commit(idx)
 		return
 	})
+}
+
+func (r *Reader) fetcher() {
+	for {
+		select {
+		case <-r.triggerFetch:
+			r.fetch()
+		case <-r.fetcherClose:
+			r.fetcherCloseNotify <- struct{}{}
+			return
+		}
+	}
 }
 
 func buildWriteScanKey(prefix string) []byte {

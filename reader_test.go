@@ -44,7 +44,6 @@ func TestLedgerWriteAndRead(t *testing.T) {
 			w.Write([]byte("second"))
 			w.Write([]byte("third"))
 
-			time.Sleep(150 * time.Millisecond)
 			assertReads(t, r, "second", "third")
 
 			r2, err := w.NewReader("client-1")
@@ -113,6 +112,28 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 		w.Write([]byte("third"))
 
 		assertReads(t, r, "third")
+	})
+}
+
+func TestLedgerReconnectAndContinueFromWhereLeft(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		w, err := NewWriter("channel-1", db)
+		assert.Nil(t, err)
+		defer w.Close()
+
+		r, err := w.NewReader("client-1")
+		assert.Nil(t, err)
+
+		// We've now established a checkpoint for the reader.
+		// Close it.
+		r.Close()
+
+		w.Write([]byte("first"))
+
+		r, err = w.NewReader("client-1")
+		assert.Nil(t, err)
+
+		assertReads(t, r, "first")
 	})
 }
 

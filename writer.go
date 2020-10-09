@@ -3,6 +3,7 @@ package ledger
 import (
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/dgraph-io/badger/v2"
 )
@@ -13,16 +14,18 @@ import (
 // using a BadgerDB Sequence which yields monotonically increasing
 // integers.
 type Writer struct {
-	id                       string
-	basePrefix               string
-	isClosed                 bool
-	chk                      *checkpoint
-	db                       *storage
-	seq                      *badger.Sequence
-	readers                  map[string]*Reader
-	newReaderNotification    chan *Reader
-	closedReaderNotification chan *Reader
-	newWriteNotification     chan struct{}
+	id                 string
+	basePrefix         string
+	chk                *checkpoint
+	db                 *storage
+	seq                *badger.Sequence
+	readers            map[string]*Reader
+	newReader          chan *Reader
+	newWrite           chan struct{}
+	closeManager       chan struct{}
+	closeManagerNotify chan struct{}
+	isClosed           bool
+	mu                 sync.Mutex
 }
 
 // NewWriter creates a default ledger writer
@@ -41,15 +44,16 @@ func NewWriterOpts(id string, db *badger.DB, opts *Options) (*Writer, error) {
 
 	s := &storage{db, opts}
 	w := &Writer{
-		id:                       id,
-		basePrefix:               basePrefix,
-		chk:                      newCheckpoint(basePrefix, s, opts),
-		db:                       s,
-		seq:                      seq,
-		newReaderNotification:    make(chan *Reader),
-		closedReaderNotification: make(chan *Reader),
-		newWriteNotification:     make(chan struct{}),
-		readers:                  map[string]*Reader{},
+		id:                 id,
+		basePrefix:         basePrefix,
+		chk:                newCheckpoint(basePrefix, s, opts),
+		db:                 s,
+		seq:                seq,
+		newReader:          make(chan *Reader),
+		newWrite:           make(chan struct{}),
+		closeManager:       make(chan struct{}),
+		closeManagerNotify: make(chan struct{}),
+		readers:            map[string]*Reader{},
 	}
 
 	return w, w.initialise()
@@ -90,34 +94,49 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 		return 0, err
 	}
 
+	// We don't care if the channel is busy, a burst of writes will be retrieved
+	// with a single fetch.
 	select {
-	case w.newWriteNotification <- struct{}{}:
+	case w.newWrite <- struct{}{}:
 	default:
 	}
 	return idx, w.chk.Commit(idx)
 }
 
 func (w *Writer) readerManager() {
-	for !w.isClosed {
+	for {
 		select {
-		case r := <-w.newReaderNotification:
+		case r := <-w.newReader:
 			// If the reader ID is already tracked, close the tracked reader
 			// and replace it for the new instance.
 			ret, ok := w.readers[r.id]
 			if ok {
-				// Launch as a go-routine so it can notify us from the closure
-				go ret.Close()
+				if ret == r {
+					continue
+				}
+				ret.Close()
 			}
 			w.readers[r.id] = r
-		case r := <-w.closedReaderNotification:
-			delete(w.readers, r.id)
-		case <-w.newWriteNotification:
+		case <-w.newWrite:
 			for _, r := range w.readers {
-				select {
-				case r.writeNotification <- struct{}{}:
-				default:
+				isClosed := r.doTriggerFetch()
+				if isClosed {
+					delete(w.readers, r.id)
 				}
 			}
+		case <-w.closeManager:
+			for _, r := range w.readers {
+				r.Close()
+			}
+			w.readers = nil
+			w.isClosed = true
+			w.seq.Release()
+			close(w.newReader)
+			close(w.newWrite)
+			close(w.closeManager)
+			w.closeManagerNotify <- struct{}{}
+			close(w.closeManagerNotify)
+			return
 		}
 	}
 }
@@ -126,8 +145,16 @@ func (w *Writer) readerManager() {
 // leads to gaps in the number space. A gap that is big enough will break
 // the ledger since it relies on fast scans by assuming there are no gaps.
 func (w *Writer) Close() {
-	w.isClosed = true
-	w.seq.Release()
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.isClosed {
+		return
+	}
+
+	w.closeManager <- struct{}{}
+	<-w.closeManagerNotify
+	return
 }
 
 func buildWriteSeqKey(prefix string) []byte {
