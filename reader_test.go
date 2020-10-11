@@ -85,7 +85,7 @@ func TestLedgerModeCustom(t *testing.T) {
 
 		opts := DefaultOptions()
 		opts.Mode = ModeCustom
-		opts.CustomIndex = 1
+		opts.CustomOffset = 1
 		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
@@ -104,7 +104,7 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 
 		opts := DefaultOptions()
 		opts.Mode = ModeCustom
-		opts.CustomIndex = 10
+		opts.CustomOffset = 10
 		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()

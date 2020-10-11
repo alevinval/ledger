@@ -34,8 +34,8 @@ type (
 
 	// Message structure used to represent read results
 	Message struct {
-		Index uint64
-		Data  []byte
+		Offset uint64
+		Data   []byte
 	}
 )
 
@@ -82,7 +82,7 @@ func (r *Reader) initialise() (err error) {
 		// based on the configured options (custom, earliest, latest...)
 		cp, err := r.chk.GetCheckpointFrom(r.w.chk)
 		if err == nil {
-			err = r.chk.Commit(cp.Index)
+			err = r.chk.Commit(cp.Offset)
 		} else {
 			// This should never happen, if it does the underlying storage
 			// may have issues
@@ -96,6 +96,9 @@ func (r *Reader) initialise() (err error) {
 	return
 }
 
+// Read the ledger, returns a channel where messages can be received
+// by the consumer of this API.
+// An error is returned in case the Reader is already closed.
 func (r *Reader) Read() (<-chan *Message, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -107,6 +110,7 @@ func (r *Reader) Read() (<-chan *Message, error) {
 	return r.messages, nil
 }
 
+// Close the reader and stop fetching records.
 func (r *Reader) Close() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -140,16 +144,16 @@ func (r *Reader) fetch() {
 		return
 	}
 
-	startIdx := cp.Index
-	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startIdx", startIdx)
-	err = r.w.db.ScanKeysIndexed(r.writeScanKey, startIdx, func(k []byte, idx uint64) (err error) {
+	startOffset := cp.Offset
+	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startOffset", startOffset)
+	err = r.w.db.ScanKeysIndexed(r.writeScanKey, startOffset, func(k []byte, offset uint64) (err error) {
 		value, err := r.w.db.GetBytes(k)
 		if err != nil {
 			return
 		}
 
-		r.messages <- &Message{idx, value}
-		r.chk.Commit(idx)
+		r.messages <- &Message{offset, value}
+		r.chk.Commit(offset)
 		return
 	})
 }

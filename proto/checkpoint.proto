@@ -4,6 +4,6 @@ package pb;
 
 option go_package = "pkg/proto";
 
-message CheckPoint {
-  uint64 index = 1;
+message Checkpoint {
+  uint64 offset = 1;
 }
