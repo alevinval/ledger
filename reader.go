@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,8 +10,7 @@ import (
 )
 
 var (
-	logger      log.Logger
-	errFullPool = errors.New("results pool is full")
+	logger log.Logger
 )
 
 func init() {
@@ -48,6 +46,9 @@ func (w *Writer) NewReader(id string) (*Reader, error) {
 
 // NewReaderOpts creates a customized ledger reader
 func (w *Writer) NewReaderOpts(id string, opts *Options) (r *Reader, err error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	if w.isClosed {
 		return nil, io.ErrClosedPipe
 	}
@@ -67,7 +68,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (r *Reader, err error) 
 	}
 	err = r.initialise()
 	if err == nil {
-		w.newReader <- r
+		w.listener.notifyReader(r)
 	}
 	return
 }
@@ -114,10 +115,10 @@ func (r *Reader) Close() {
 		return
 	}
 
-	r.isClosed = true
 	r.fetcherClose <- struct{}{}
 	<-r.fetcherCloseNotify
 	close(r.messages)
+	r.isClosed = true
 }
 
 func (r *Reader) doTriggerFetch() bool {

@@ -14,18 +14,14 @@ import (
 // using a BadgerDB Sequence which yields monotonically increasing
 // integers.
 type Writer struct {
-	id                 string
-	basePrefix         string
-	chk                *checkpoint
-	db                 *storage
-	seq                *badger.Sequence
-	readers            map[string]*Reader
-	newReader          chan *Reader
-	newWrite           chan struct{}
-	closeManager       chan struct{}
-	closeManagerNotify chan struct{}
-	isClosed           bool
-	mu                 sync.Mutex
+	id         string
+	basePrefix string
+	isClosed   bool
+	chk        *checkpoint
+	db         *storage
+	seq        *badger.Sequence
+	listener   *writerListener
+	mu         sync.RWMutex
 }
 
 // NewWriter creates a default ledger writer
@@ -44,16 +40,18 @@ func NewWriterOpts(id string, db *badger.DB, opts *Options) (*Writer, error) {
 
 	s := &storage{db, opts}
 	w := &Writer{
-		id:                 id,
-		basePrefix:         basePrefix,
-		chk:                newCheckpoint(basePrefix, s, opts),
-		db:                 s,
-		seq:                seq,
-		newReader:          make(chan *Reader),
-		newWrite:           make(chan struct{}),
-		closeManager:       make(chan struct{}),
-		closeManagerNotify: make(chan struct{}),
-		readers:            map[string]*Reader{},
+		id:         id,
+		basePrefix: basePrefix,
+		chk:        newCheckpoint(basePrefix, s, opts),
+		db:         s,
+		seq:        seq,
+		listener: &writerListener{
+			readers:            make(map[string]*Reader),
+			newReader:          make(chan *Reader),
+			newWrite:           make(chan struct{}),
+			closeManager:       make(chan struct{}),
+			closeManagerNotify: make(chan struct{}),
+		},
 	}
 
 	return w, w.initialise()
@@ -64,7 +62,7 @@ func (w *Writer) initialise() (err error) {
 	if notFoundErr != nil {
 		err = w.chk.Commit(0)
 	}
-	go w.readerManager()
+	go w.listener.manager()
 	return
 }
 
@@ -94,51 +92,9 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 		return 0, err
 	}
 
-	// We don't care if the channel is busy, a burst of writes will be retrieved
-	// with a single fetch.
-	select {
-	case w.newWrite <- struct{}{}:
-	default:
-	}
-	return idx, w.chk.Commit(idx)
-}
+	defer w.listener.notifyWrite()
 
-func (w *Writer) readerManager() {
-	for {
-		select {
-		case r := <-w.newReader:
-			// If the reader ID is already tracked, close the tracked reader
-			// and replace it for the new instance.
-			ret, ok := w.readers[r.id]
-			if ok {
-				if ret == r {
-					continue
-				}
-				ret.Close()
-			}
-			w.readers[r.id] = r
-		case <-w.newWrite:
-			for _, r := range w.readers {
-				isClosed := r.doTriggerFetch()
-				if isClosed {
-					delete(w.readers, r.id)
-				}
-			}
-		case <-w.closeManager:
-			for _, r := range w.readers {
-				r.Close()
-			}
-			w.readers = nil
-			w.isClosed = true
-			w.seq.Release()
-			close(w.newReader)
-			close(w.newWrite)
-			close(w.closeManager)
-			w.closeManagerNotify <- struct{}{}
-			close(w.closeManagerNotify)
-			return
-		}
-	}
+	return idx, w.chk.Commit(idx)
 }
 
 // Close the writer by releasing the sequence. Not releasing the sequence
@@ -152,8 +108,10 @@ func (w *Writer) Close() {
 		return
 	}
 
-	w.closeManager <- struct{}{}
-	<-w.closeManagerNotify
+	w.listener.close()
+	w.seq.Release()
+	w.isClosed = true
+
 	return
 }
 
