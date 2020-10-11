@@ -95,8 +95,15 @@ func (r *Reader) initialise() (err error) {
 	return
 }
 
-func (r *Reader) Read() <-chan *Message {
-	return r.messages
+func (r *Reader) Read() (<-chan *Message, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.isClosed {
+		return nil, io.ErrClosedPipe
+	}
+
+	return r.messages, nil
 }
 
 func (r *Reader) Close() {
@@ -110,6 +117,7 @@ func (r *Reader) Close() {
 	r.isClosed = true
 	r.fetcherClose <- struct{}{}
 	<-r.fetcherCloseNotify
+	close(r.messages)
 }
 
 func (r *Reader) doTriggerFetch() bool {

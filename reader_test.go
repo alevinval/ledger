@@ -154,8 +154,10 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 		}
 
 		total := ""
+		messageCh, err := r.Read()
+		assert.Nil(t, err)
 		for i := 0; i < int(3*opts.BatchSize); i++ {
-			s := <-r.Read()
+			s := <-messageCh
 			total += string(s.Data)
 		}
 
@@ -163,10 +165,29 @@ func TestLedgerMoreThanOneBatchSize(t *testing.T) {
 	})
 }
 
+func TestLedgerClose(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		w, err := NewWriter("writer-1", db)
+		assert.Nil(t, err)
+
+		r1, err := w.NewReader("client-1")
+		assert.Nil(t, err)
+
+		r2, err := w.NewReader("client-2")
+		assert.Nil(t, err)
+
+		w.Close()
+		r1.Close()
+		r2.Close()
+	})
+}
+
 func assertReads(t *testing.T, r *Reader, expected ...string) {
+	ch, err := r.Read()
+	assert.Nil(t, err)
 	for i := range expected {
 		select {
-		case actual := <-r.Read():
+		case actual := <-ch:
 			assert.Equal(t, expected[i], string(actual.Data))
 		case <-time.After(100 * time.Millisecond):
 			if expected[i] != "" {
