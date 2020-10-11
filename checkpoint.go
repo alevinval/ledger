@@ -20,28 +20,28 @@ func newCheckpoint(basePrefix string, db *storage, opts *Options) *checkpoint {
 	}
 }
 
-func (c *checkpoint) GetCheckpoint() (*proto.CheckPoint, error) {
-	var cp = &proto.CheckPoint{}
+func (c *checkpoint) GetCheckpoint() (*proto.Checkpoint, error) {
+	var cp = &proto.Checkpoint{}
 	err := c.db.Get(c.key, cp)
 	return cp, err
 }
 
-func (c *checkpoint) GetCheckpointFrom(other *checkpoint) (*proto.CheckPoint, error) {
+func (c *checkpoint) GetCheckpointFrom(other *checkpoint) (*proto.Checkpoint, error) {
 	cp, err := other.GetCheckpoint()
 	switch c.opts.Mode {
 	case ModeEarliest:
-		cp.Index = 0
+		cp.Offset = 0
 	case ModeCustom:
-		if c.opts.CustomIndex < cp.Index {
-			cp.Index = c.opts.CustomIndex
+		if c.opts.CustomOffset < cp.Offset {
+			cp.Offset = c.opts.CustomOffset
 		}
 	}
 	return cp, err
 }
 
-func (c *checkpoint) Commit(index uint64) error {
-	cp := &proto.CheckPoint{
-		Index: index,
+func (c *checkpoint) Commit(offset uint64) error {
+	cp := &proto.Checkpoint{
+		Offset: offset,
 	}
 	return c.db.Put(c.key, cp)
 }

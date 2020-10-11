@@ -17,7 +17,7 @@ type (
 		// - Determine the key space that is generated for efficiently scanning the kv store.
 		// For the latter, the number of digits will be used to determine a power of ten (10, 100, 1000, ...)
 		BatchSize         uint64
-		CustomIndex       uint64
+		CustomOffset      uint64
 		Mode              OptionMode
 		SequenceBandwidth uint64
 	}

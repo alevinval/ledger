@@ -25,16 +25,16 @@ const (
 // of the legacy proto package is being used.
 const _ = proto.ProtoPackageIsVersion4
 
-type CheckPoint struct {
+type Checkpoint struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Index uint64 `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
+	Offset uint64 `protobuf:"varint,1,opt,name=offset,proto3" json:"offset,omitempty"`
 }
 
-func (x *CheckPoint) Reset() {
-	*x = CheckPoint{}
+func (x *Checkpoint) Reset() {
+	*x = Checkpoint{}
 	if protoimpl.UnsafeEnabled {
 		mi := &file_checkpoint_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -42,13 +42,13 @@ func (x *CheckPoint) Reset() {
 	}
 }
 
-func (x *CheckPoint) String() string {
+func (x *Checkpoint) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*CheckPoint) ProtoMessage() {}
+func (*Checkpoint) ProtoMessage() {}
 
-func (x *CheckPoint) ProtoReflect() protoreflect.Message {
+func (x *Checkpoint) ProtoReflect() protoreflect.Message {
 	mi := &file_checkpoint_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -60,14 +60,14 @@ func (x *CheckPoint) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use CheckPoint.ProtoReflect.Descriptor instead.
-func (*CheckPoint) Descriptor() ([]byte, []int) {
+// Deprecated: Use Checkpoint.ProtoReflect.Descriptor instead.
+func (*Checkpoint) Descriptor() ([]byte, []int) {
 	return file_checkpoint_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *CheckPoint) GetIndex() uint64 {
+func (x *Checkpoint) GetOffset() uint64 {
 	if x != nil {
-		return x.Index
+		return x.Offset
 	}
 	return 0
 }
@@ -76,10 +76,11 @@ var File_checkpoint_proto protoreflect.FileDescriptor
 
 var file_checkpoint_proto_rawDesc = []byte{
 	0x0a, 0x10, 0x63, 0x68, 0x65, 0x63, 0x6b, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x12, 0x02, 0x70, 0x62, 0x22, 0x22, 0x0a, 0x0a, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x50,
-	0x6f, 0x69, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x18, 0x01, 0x20,
-	0x01, 0x28, 0x04, 0x52, 0x05, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x42, 0x0b, 0x5a, 0x09, 0x70, 0x6b,
-	0x67, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x74, 0x6f, 0x12, 0x02, 0x70, 0x62, 0x22, 0x24, 0x0a, 0x0a, 0x43, 0x68, 0x65, 0x63, 0x6b, 0x70,
+	0x6f, 0x69, 0x6e, 0x74, 0x12, 0x16, 0x0a, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x6f, 0x66, 0x66, 0x73, 0x65, 0x74, 0x42, 0x0b, 0x5a, 0x09,
+	0x70, 0x6b, 0x67, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f,
+	0x33,
 }
 
 var (
@@ -96,7 +97,7 @@ func file_checkpoint_proto_rawDescGZIP() []byte {
 
 var file_checkpoint_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_checkpoint_proto_goTypes = []interface{}{
-	(*CheckPoint)(nil), // 0: pb.CheckPoint
+	(*Checkpoint)(nil), // 0: pb.Checkpoint
 }
 var file_checkpoint_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -113,7 +114,7 @@ func file_checkpoint_proto_init() {
 	}
 	if !protoimpl.UnsafeEnabled {
 		file_checkpoint_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*CheckPoint); i {
+			switch v := v.(*Checkpoint); i {
 			case 0:
 				return &v.state
 			case 1:
