@@ -46,10 +46,10 @@ func TestLedgerWriteAndRead(t *testing.T) {
 
 			assertReads(t, r, "second", "third")
 
-			r2, err := w.NewReader("client-1")
+			r, err = w.NewReader("client-1")
 			assert.Nil(t, err)
-			defer r2.Close()
-			assertReads(t, r2, "")
+			defer r.Close()
+			assertReads(t, r, "")
 		})
 
 	}

@@ -152,8 +152,14 @@ func (r *Reader) fetch() {
 			return
 		}
 
-		r.messages <- &Message{offset, value}
-		r.chk.Commit(offset)
+		select {
+		case r.messages <- &Message{offset, value}:
+			// TODO: move commit responsibility to the user
+			r.chk.Commit(offset)
+		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
+			logger.Log("ledger-fetch", "queuing", "warning", "delivery timeout reached, make sure messages are being consumed")
+			return
+		}
 		return
 	})
 }
