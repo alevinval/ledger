@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/go-kit/kit/log"
 )
@@ -22,6 +23,7 @@ type (
 		id                 string
 		writeScanKey       []byte
 		isClosed           bool
+		fetchStartOffset   uint64
 		messages           chan *Message
 		opts               *Options
 		chk                *checkpoint
@@ -110,6 +112,10 @@ func (r *Reader) Read() (<-chan *Message, error) {
 	return r.messages, nil
 }
 
+func (r *Reader) Commit(offset uint64) error {
+	return r.chk.Commit(offset)
+}
+
 // Close the reader and stop fetching records.
 func (r *Reader) Close() {
 	r.mu.Lock()
@@ -138,15 +144,16 @@ func (r *Reader) doTriggerFetch() bool {
 }
 
 func (r *Reader) fetch() {
-	cp, err := r.chk.GetCheckpoint()
-	if err != nil {
-		logger.Log("ledger-open", "cannot retrieve reader checkpoint", "error", err)
-		return
+	if r.fetchStartOffset == 0 {
+		cp, err := r.chk.GetCheckpoint()
+		if err != nil {
+			logger.Log("ledger-fetch", "cannot retrieve reader checkpoint", "error", err)
+			return
+		}
+		r.fetchStartOffset = cp.Offset
 	}
-
-	startOffset := cp.Offset
-	logger.Log("ledger-open", "scanning", "prefix", r.writeScanKey, "startOffset", startOffset)
-	err = r.w.db.ScanKeysIndexed(r.writeScanKey, startOffset, func(k []byte, offset uint64) (err error) {
+	logger.Log("ledger-fetch", "scanning", "prefix", r.writeScanKey, "startOffset", r.fetchStartOffset)
+	r.w.db.ScanKeysIndexed(r.writeScanKey, r.fetchStartOffset, func(k []byte, offset uint64) (err error) {
 		value, err := r.w.db.GetBytes(k)
 		if err != nil {
 			return
@@ -154,8 +161,7 @@ func (r *Reader) fetch() {
 
 		select {
 		case r.messages <- &Message{offset, value}:
-			// TODO: move commit responsibility to the user
-			r.chk.Commit(offset)
+			r.fetchStartOffset = offset
 		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
 			logger.Log("ledger-fetch", "queuing", "warning", "delivery timeout reached, make sure messages are being consumed")
 			return
