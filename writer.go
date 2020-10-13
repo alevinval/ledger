@@ -92,7 +92,17 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 		return 0, err
 	}
 
-	defer w.listener.notifyWrite()
+	defer func() {
+		w.mu.RLock()
+		defer w.mu.RUnlock()
+
+		// If the writer has been closed we should not notify anything, the listener
+		// has been closed to avoid leaking the go-routine, so this avoids the panic from
+		// sending on a closed channel.
+		if !w.isClosed {
+			w.listener.notifyWrite()
+		}
+	}()
 
 	return idx, w.chk.Commit(idx)
 }
