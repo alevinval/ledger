@@ -31,17 +31,11 @@ type storage struct {
 	opts *Options
 }
 
-func (s *storage) PutBytes(key, value []byte) error {
-	return s.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(key, value)
-	})
-}
-
 func (s *storage) GetBytes(key []byte) (value []byte, err error) {
 	err = s.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
 		if err != nil {
-			return nil
+			return err
 		}
 		return item.Value(func(v []byte) error {
 			value = v
@@ -49,6 +43,12 @@ func (s *storage) GetBytes(key []byte) (value []byte, err error) {
 		})
 	})
 	return
+}
+
+func (s *storage) PutBytes(key, value []byte) error {
+	return s.db.Update(func(txn *badger.Txn) error {
+		return txn.Set(key, value)
+	})
 }
 
 func (s *storage) Get(key []byte, dst proto.Message) error {
