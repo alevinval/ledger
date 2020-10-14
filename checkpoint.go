@@ -28,10 +28,10 @@ func (c *checkpoint) GetCheckpoint() (*proto.Checkpoint, error) {
 
 func (c *checkpoint) GetCheckpointFrom(other *checkpoint) (*proto.Checkpoint, error) {
 	cp, err := other.GetCheckpoint()
-	switch c.opts.Mode {
-	case ModeEarliest:
+	switch c.opts.Offset {
+	case EarliestOffset:
 		cp.Offset = 0
-	case ModeCustom:
+	case CustomOffset:
 		if c.opts.CustomOffset < cp.Offset {
 			cp.Offset = c.opts.CustomOffset
 		}

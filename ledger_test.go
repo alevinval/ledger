@@ -26,7 +26,7 @@ func TestLedgerWriteAndReadDifferentBatchSizes(t *testing.T) {
 	}
 	for _, opts := range options {
 		opts.SequenceBandwidth = 1000
-		opts.Mode = ModeLatest
+		opts.Offset = LatestOffset
 
 		t.Logf("running test with options: %v", opts)
 		runTest(func(db *badger.DB) {
@@ -91,7 +91,7 @@ func TestLedgerModeEarliest(t *testing.T) {
 		w.Write([]byte("second"))
 
 		opts := DefaultOptions()
-		opts.Mode = ModeEarliest
+		opts.Offset = EarliestOffset
 		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
 		defer r.Close()
@@ -110,7 +110,7 @@ func TestLedgerModeCustom(t *testing.T) {
 		w.Write([]byte("second"))
 
 		opts := DefaultOptions()
-		opts.Mode = ModeCustom
+		opts.Offset = CustomOffset
 		opts.CustomOffset = 1
 		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)
@@ -129,7 +129,7 @@ func TestLedgerModeCustomGreaterThanMax(t *testing.T) {
 		w.Write([]byte("second"))
 
 		opts := DefaultOptions()
-		opts.Mode = ModeCustom
+		opts.Offset = CustomOffset
 		opts.CustomOffset = 10
 		r, err := w.NewReaderOpts("client-1", opts)
 		assert.Nil(t, err)

@@ -3,12 +3,12 @@ package ledger
 import "time"
 
 const (
-	// ModeCustom reads from a specific offset onwards.
-	ModeCustom OptionMode = iota
-	// ModeEarliest reads from earliest possible offset onwards.
-	ModeEarliest
-	// ModeLatest reads from latest write offset onwards.
-	ModeLatest
+	// CustomOffset reads from a specific offset onwards.
+	CustomOffset OffsetMode = iota
+	// EarliestOffset reads from earliest possible offset onwards.
+	EarliestOffset
+	// LatestOffset reads from latest write offset onwards.
+	LatestOffset
 )
 
 type (
@@ -23,12 +23,12 @@ type (
 		// DeliveryTimeout defines how long fetch will wait trying to queue a message to be processed
 		// when the timeout is reached, the fetching is cancelled. Unit is milliseconds.
 		DeliveryTimeout   time.Duration
-		Mode              OptionMode
+		Offset            OffsetMode
 		SequenceBandwidth uint64
 	}
 
-	// OptionMode to determine how the initial checkpoint will be created
-	OptionMode byte
+	// OffsetMode to determine how the initial checkpoint will be created
+	OffsetMode byte
 )
 
 // DefaultOptions returns most common configuration
@@ -36,7 +36,7 @@ func DefaultOptions() *Options {
 	return &Options{
 		BatchSize:         1000,
 		DeliveryTimeout:   60000,
-		Mode:              ModeLatest,
+		Offset:            LatestOffset,
 		SequenceBandwidth: 1000,
 	}
 }
