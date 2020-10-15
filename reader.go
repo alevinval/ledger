@@ -112,6 +112,8 @@ func (r *Reader) Read() (<-chan *Message, error) {
 	return r.messages, nil
 }
 
+// Commit the offset, creates a new checkpoint to persist
+// lastest ID that has been processed by the Reader.
 func (r *Reader) Commit(offset uint64) error {
 	return r.chk.Commit(offset)
 }
