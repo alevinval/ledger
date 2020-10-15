@@ -64,7 +64,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (r *Reader, err error) 
 		messages:           make(chan *Message),
 		opts:               opts,
 		w:                  w,
-		triggerFetch:       make(chan struct{}),
+		triggerFetch:       make(chan struct{}, 1),
 		fetcherClose:       make(chan struct{}),
 		fetcherCloseNotify: make(chan struct{}),
 	}
@@ -141,7 +141,10 @@ func (r *Reader) doTriggerFetch() bool {
 		return true
 	}
 
-	r.triggerFetch <- struct{}{}
+	select {
+	case r.triggerFetch <- struct{}{}:
+	default:
+	}
 	return false
 }
 
