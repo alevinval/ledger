@@ -88,7 +88,7 @@ func (r *Reader) initialise() (err error) {
 		} else {
 			// This should never happen, if it does the underlying storage
 			// may have issues
-			logger.Log("ledger-initialise", "cannot create starting checkpoint")
+			logger.Log("reader-initialise", "cannot create starting checkpoint")
 		}
 	}
 	if err == nil {
@@ -149,12 +149,12 @@ func (r *Reader) fetch() {
 	if r.fetchStartOffset == 0 {
 		cp, err := r.chk.GetCheckpoint()
 		if err != nil {
-			logger.Log("ledger-fetch", "cannot retrieve reader checkpoint", "error", err)
+			logger.Log("reader-fetch", "checkpoint", "error", "cannot retrieve reader checkpoint", "err", err)
 			return
 		}
 		r.fetchStartOffset = cp.Offset
 	}
-	logger.Log("ledger-fetch", "scanning", "prefix", r.writeScanKey, "startOffset", r.fetchStartOffset)
+	logger.Log("reader-fetch", "scanning", "prefix", r.writeScanKey, "startOffset", r.fetchStartOffset)
 	r.w.db.ScanKeysIndexed(r.writeScanKey, r.fetchStartOffset, func(k []byte, offset uint64) (err error) {
 		value, err := r.w.db.GetBytes(k)
 		if err != nil {
@@ -165,7 +165,7 @@ func (r *Reader) fetch() {
 		case r.messages <- &Message{offset, value}:
 			r.fetchStartOffset = offset
 		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
-			logger.Log("ledger-fetch", "queuing", "warning", "delivery timeout reached, make sure messages are being consumed")
+			logger.Log("reader-fetch", "queuing", "warning", "delivery timeout reached, make sure messages are being consumed")
 			return
 		}
 		return
