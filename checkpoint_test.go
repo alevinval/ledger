@@ -57,3 +57,52 @@ func TestCheckpointCommitAndGet(t *testing.T) {
 		assert.Equal(t, uint64(123), cp.Offset)
 	})
 }
+
+func TestCheckpointFromEarliest(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		opts := DefaultOptions()
+		opts.Offset = EarliestOffset
+		s := &storage{db, opts}
+
+		master := newCheckpoint("prefix-master", s, opts)
+		master.Commit(10)
+		reader := newCheckpoint("prefix-reader", s, opts)
+
+		cp, err := reader.GetCheckpointFrom(master)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(0), cp.Offset)
+	})
+}
+
+func TestCheckpointFromLatest(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		opts := DefaultOptions()
+		opts.Offset = LatestOffset
+		s := &storage{db, opts}
+
+		master := newCheckpoint("prefix-master", s, opts)
+		master.Commit(10)
+		reader := newCheckpoint("prefix-reader", s, opts)
+
+		cp, err := reader.GetCheckpointFrom(master)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(10), cp.Offset)
+	})
+}
+
+func TestCheckpointFromCustom(t *testing.T) {
+	runTest(func(db *badger.DB) {
+		opts := DefaultOptions()
+		opts.Offset = CustomOffset
+		opts.CustomOffset = 5
+		s := &storage{db, opts}
+
+		master := newCheckpoint("prefix-master", s, opts)
+		master.Commit(10)
+		reader := newCheckpoint("prefix-reader", s, opts)
+
+		cp, err := reader.GetCheckpointFrom(master)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(5), cp.Offset)
+	})
+}
