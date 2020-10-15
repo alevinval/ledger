@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/alevinval/ledger/pkg/proto"
+	"github.com/alevinval/ledger/pkg/testutils"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckpointKey(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		s := &storage{db, opts}
 
@@ -20,7 +21,7 @@ func TestCheckpointKey(t *testing.T) {
 }
 
 func TestCheckpointGetMissing(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		s := &storage{db, opts}
 
@@ -33,7 +34,7 @@ func TestCheckpointGetMissing(t *testing.T) {
 }
 
 func TestCheckpointCommit(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		s := &storage{db, opts}
 
@@ -45,7 +46,7 @@ func TestCheckpointCommit(t *testing.T) {
 }
 
 func TestCheckpointCommitAndGet(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		s := &storage{db, opts}
 
@@ -59,7 +60,7 @@ func TestCheckpointCommitAndGet(t *testing.T) {
 }
 
 func TestCheckpointFromEarliest(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		opts.Offset = EarliestOffset
 		s := &storage{db, opts}
@@ -75,7 +76,7 @@ func TestCheckpointFromEarliest(t *testing.T) {
 }
 
 func TestCheckpointFromLatest(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		opts.Offset = LatestOffset
 		s := &storage{db, opts}
@@ -91,7 +92,7 @@ func TestCheckpointFromLatest(t *testing.T) {
 }
 
 func TestCheckpointFromCustom(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		opts := DefaultOptions()
 		opts.Offset = CustomOffset
 		opts.CustomOffset = 5

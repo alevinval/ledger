@@ -3,12 +3,13 @@ package ledger
 import (
 	"testing"
 
+	"github.com/alevinval/ledger/pkg/testutils"
 	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestStorageGetBytes(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		s := storage{db, DefaultOptions()}
 
 		_, err := s.GetBytes([]byte("some-key"))
@@ -18,7 +19,7 @@ func TestStorageGetBytes(t *testing.T) {
 }
 
 func TestStoragePutBytes(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		s := storage{db, DefaultOptions()}
 
 		err := s.PutBytes([]byte("some-key"), []byte("some-value"))
@@ -28,7 +29,7 @@ func TestStoragePutBytes(t *testing.T) {
 }
 
 func TestStoragePutAndGetBytes(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		s := storage{db, DefaultOptions()}
 
 		s.PutBytes([]byte("some-key"), []byte("some-value"))
@@ -40,7 +41,7 @@ func TestStoragePutAndGetBytes(t *testing.T) {
 }
 
 func TestStorageScanKeysIndexedEmpty(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		s := storage{db, DefaultOptions()}
 
 		keys := [][]byte{}
@@ -54,7 +55,7 @@ func TestStorageScanKeysIndexedEmpty(t *testing.T) {
 }
 
 func TestStorageScanKeysIndexed(t *testing.T) {
-	runTest(func(db *badger.DB) {
+	testutils.WithDB(func(db *badger.DB) {
 		s := storage{db, DefaultOptions()}
 
 		s.PutBytes([]byte("prefix-000000000000000001"), []byte("value-1"))
