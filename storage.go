@@ -10,7 +10,7 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-const maxIdx = math.MaxUint64
+const maxOffset = math.MaxUint64
 
 var (
 	uintDigits int
@@ -18,7 +18,7 @@ var (
 
 func init() {
 	var i uint64
-	for i = maxIdx; i >= 10; i /= 10 {
+	for i = maxOffset; i >= 10; i /= 10 {
 		uintDigits++
 	}
 }
@@ -71,26 +71,26 @@ func (s *storage) Put(key []byte, pb proto.Message) error {
 	return s.PutBytes(key, value)
 }
 
-func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k []byte, idx uint64) (err error)) error {
+func (s *storage) ScanKeysIndexed(basePrefix []byte, startOffset uint64, cb func(k []byte, offset uint64) (err error)) error {
 	return s.db.Update(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		for prefix := range s.buildKeySpace(basePrefix, startIdx) {
+		for prefix := range s.buildKeySpace(basePrefix, startOffset) {
 			it.Rewind()
 
 			isEmptySeek := true
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 				key := it.Item().KeyCopy(nil)
-				keyIdx := bytes.TrimPrefix(key, basePrefix)
-				idx, err := strconv.ParseUint(string(keyIdx), 10, 64)
+				keyOffset := bytes.TrimPrefix(key, basePrefix)
+				offset, err := strconv.ParseUint(string(keyOffset), 10, 64)
 				if err != nil {
 					continue
 				}
-				if idx > startIdx {
-					err := cb(key, idx)
+				if offset > startOffset {
+					err := cb(key, offset)
 					if err != nil {
 						return err
 					}
@@ -109,12 +109,12 @@ func (s *storage) ScanKeysIndexed(basePrefix []byte, startIdx uint64, cb func(k 
 	})
 }
 
-func (s *storage) buildKeySpace(prefix []byte, startIdx uint64) <-chan []byte {
+func (s *storage) buildKeySpace(prefix []byte, startOffset uint64) <-chan []byte {
 	out := make(chan []byte)
 	go func() {
 		keySpaceFmt := getKeySpaceScanFmt(s.opts)
-		for n := startIdx / s.opts.BatchSize; n < maxIdx; n++ {
-			prefix := fmt.Sprintf(keySpaceFmt, prefix, n)
+		for offset := startOffset / s.opts.BatchSize; offset < maxOffset; offset++ {
+			prefix := fmt.Sprintf(keySpaceFmt, prefix, offset)
 			out <- []byte(prefix)
 			logger.Log("storage", "buildKeySpace", "generatedKey", prefix)
 		}
