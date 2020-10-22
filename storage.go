@@ -13,15 +13,8 @@ import (
 const maxOffset = math.MaxUint64
 
 var (
-	uintDigits int
+	uintDigits = getDigitsFromNumber(maxOffset)
 )
-
-func init() {
-	var i uint64
-	for i = maxOffset; i >= 10; i /= 10 {
-		uintDigits++
-	}
-}
 
 // storage wrapper for all badger related operations, mostly for convenience
 // but also critical pieces the ledger relies upon, like the ScanKeysIndexed
@@ -123,12 +116,16 @@ func (s *storage) buildKeySpace(prefix []byte, startOffset uint64) <-chan []byte
 }
 
 func getKeySpaceScanFmt(opts *Options) string {
-	batchDigits := 0
-	for i := opts.BatchSize; i >= 10; i /= 10 {
-		batchDigits++
-	}
-	if batchDigits == 0 {
-		batchDigits = 1
-	}
+	batchDigits := getDigitsFromNumber(opts.BatchSize)
 	return "%s%0." + strconv.Itoa(uintDigits-batchDigits) + "d"
+}
+
+func getDigitsFromNumber(number uint64) (numDigits int) {
+	for i := number; i >= 10; i /= 10 {
+		numDigits++
+	}
+	if numDigits == 0 {
+		return 1
+	}
+	return
 }
