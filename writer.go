@@ -8,6 +8,10 @@ import (
 	"github.com/dgraph-io/badger/v2"
 )
 
+var (
+	writeKeyFmt = "%s-write-%0." + strconv.Itoa(uintDigits) + "d"
+)
+
 // Writer knows how to store messages in the ledger, it performs
 // indexed insertions and keeps track of the index of the latest
 // message that has been written. Indexed insertions are possible
@@ -130,6 +134,5 @@ func buildWriteSeqKey(prefix string) []byte {
 }
 
 func buildWriteKey(prefix string, seq uint64) []byte {
-	sfmt := "%s-write-%0." + strconv.Itoa(uintDigits) + "d"
-	return []byte(fmt.Sprintf(sfmt, prefix, seq))
+	return []byte(fmt.Sprintf(writeKeyFmt, prefix, seq))
 }
