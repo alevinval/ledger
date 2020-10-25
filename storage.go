@@ -64,7 +64,11 @@ func (s *storage) Put(key []byte, pb proto.Message) error {
 	return s.PutBytes(key, value)
 }
 
-func (s *storage) ScanKeysIndexed(basePrefix []byte, startOffset uint64, cb func(k []byte, offset uint64) (err error)) error {
+func (s *storage) ScanKeysIndexed(
+	basePrefix []byte,
+	startOffset uint64,
+	fn func(key []byte, offset uint64) (err error),
+) error {
 	return s.db.Update(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
@@ -72,18 +76,17 @@ func (s *storage) ScanKeysIndexed(basePrefix []byte, startOffset uint64, cb func
 		defer it.Close()
 
 		for prefix := range s.buildKeySpace(basePrefix, startOffset) {
-			it.Rewind()
-
 			isEmptySeek := true
+			it.Rewind()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
-				key := it.Item().KeyCopy(nil)
-				keyOffset := bytes.TrimPrefix(key, basePrefix)
+				item := it.Item()
+				keyOffset := bytes.TrimPrefix(item.Key(), basePrefix)
 				offset, err := strconv.ParseUint(string(keyOffset), 10, 64)
 				if err != nil {
 					continue
 				}
 				if offset > startOffset {
-					err := cb(key, offset)
+					err := fn(item.KeyCopy(nil), offset)
 					if err != nil {
 						return err
 					}
