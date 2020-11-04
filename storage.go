@@ -24,6 +24,12 @@ type storage struct {
 	opts *Options
 }
 
+type keySpaceIterator struct {
+	opts       *Options
+	basePrefix []byte
+	offset     uint64
+}
+
 func (s *storage) GetBytes(key []byte) (value []byte, err error) {
 	err = s.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(key)
@@ -75,7 +81,9 @@ func (s *storage) ScanKeysIndexed(
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		for prefix := range s.buildKeySpace(basePrefix, startOffset) {
+		keySpaceIt := s.newKeySpaceIterator(basePrefix, startOffset)
+		for keySpaceIt.HasNext() {
+			prefix := keySpaceIt.Next()
 			isEmptySeek := true
 			it.Rewind()
 			for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
@@ -105,17 +113,24 @@ func (s *storage) ScanKeysIndexed(
 	})
 }
 
-func (s *storage) buildKeySpace(prefix []byte, startOffset uint64) <-chan []byte {
-	out := make(chan []byte)
-	go func() {
-		keySpaceFmt := getKeySpaceScanFmt(s.opts)
-		for offset := startOffset / s.opts.BatchSize; offset < maxOffset; offset++ {
-			prefix := fmt.Sprintf(keySpaceFmt, prefix, offset)
-			out <- []byte(prefix)
-			logger.Log("storage", "buildKeySpace", "generatedKey", prefix)
-		}
-	}()
-	return out
+func (s *storage) newKeySpaceIterator(prefix []byte, startOffset uint64) *keySpaceIterator {
+	return &keySpaceIterator{
+		opts:       s.opts,
+		basePrefix: prefix,
+		offset:     startOffset / s.opts.BatchSize,
+	}
+}
+
+func (it *keySpaceIterator) HasNext() bool {
+	return it.offset < maxOffset
+}
+
+func (it *keySpaceIterator) Next() []byte {
+	keySpaceFmt := getKeySpaceScanFmt(it.opts)
+	prefix := fmt.Sprintf(keySpaceFmt, it.basePrefix, it.offset)
+	it.offset++
+	logger.Log("storage", "buildKeySpace", "generatedKey", prefix)
+	return []byte(prefix)
 }
 
 func getKeySpaceScanFmt(opts *Options) string {
