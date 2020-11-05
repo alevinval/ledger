@@ -39,6 +39,18 @@ type (
 		Offset uint64
 		Data   []byte
 	}
+
+	// PartitionedMessage structure that represents messages from a partitioned reader
+	PartitionedMessage struct {
+		Partition Commitable
+		Offset    uint64
+		Data      []byte
+	}
+
+	// Commitable interface
+	Commitable interface {
+		Commit(uint64) error
+	}
 )
 
 // NewReader creates a default ledger reader

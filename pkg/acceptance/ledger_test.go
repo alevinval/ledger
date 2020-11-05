@@ -185,17 +185,31 @@ func TestLedgerClose(t *testing.T) {
 	})
 }
 
+type ReaderI interface {
+	Read() (<-chan *ledger.Message, error)
+	Commit(uint64) error
+}
+
+type PartitionedReaderI interface {
+	Read() (<-chan *ledger.PartitionedMessage, error)
+}
+
 // assert reads with auto-commits between reads.
-func assertReads(t *testing.T, r *ledger.Reader, expected ...string) {
+func assertReads(t *testing.T, r ReaderI, expected ...string) {
 	assertReadsImpl(t, r, true, expected...)
 }
 
+// assert reads with auto-commits between reads.
+func assertReadsPartitioned(t *testing.T, r PartitionedReaderI, expected ...string) {
+	assertReadsPartitionedImpl(t, r, true, expected...)
+}
+
 // assert reads without auto-commits between reads.
-func assertReadsNoCommit(t *testing.T, r *ledger.Reader, expected ...string) {
+func assertReadsNoCommit(t *testing.T, r ReaderI, expected ...string) {
 	assertReadsImpl(t, r, false, expected...)
 }
 
-func assertReadsImpl(t *testing.T, r *ledger.Reader, autoCommit bool, expected ...string) {
+func assertReadsImpl(t *testing.T, r ReaderI, autoCommit bool, expected ...string) {
 	ch, err := r.Read()
 	assert.Nil(t, err)
 	for i := range expected {
@@ -204,6 +218,24 @@ func assertReadsImpl(t *testing.T, r *ledger.Reader, autoCommit bool, expected .
 			assert.Equal(t, expected[i], string(actual.Data))
 			if autoCommit {
 				r.Commit(actual.Offset)
+			}
+		case <-time.After(100 * time.Millisecond):
+			if expected[i] != "" {
+				assert.FailNowf(t, "missing-read", "expected %q, instead read timeout", expected[i])
+			}
+		}
+	}
+}
+
+func assertReadsPartitionedImpl(t *testing.T, r PartitionedReaderI, autoCommit bool, expected ...string) {
+	ch, err := r.Read()
+	assert.Nil(t, err)
+	for i := range expected {
+		select {
+		case actual := <-ch:
+			assert.Equal(t, expected[i], string(actual.Data))
+			if autoCommit {
+				actual.Partition.Commit(actual.Offset)
 			}
 		case <-time.After(100 * time.Millisecond):
 			if expected[i] != "" {
