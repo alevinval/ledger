@@ -21,7 +21,7 @@ var (
 	logger = log.GetLogger()
 )
 
-// storage wrapper for all badger related operations, mostly for convenience
+// Storage wrapper for all badger related operations, mostly for convenience
 // but also critical pieces the ledger relies upon, like the ScanKeysIndexed
 // implementation which makes everything possible.
 type Storage struct {
@@ -29,6 +29,9 @@ type Storage struct {
 	Opts *base.Options
 }
 
+// keySpaceIterator is used to generate keys for Badger scan operations
+// It will generate the next key to be scanned, this process can run until
+// the maximum possible offset is reached.
 type keySpaceIterator struct {
 	opts       *base.Options
 	basePrefix []byte
