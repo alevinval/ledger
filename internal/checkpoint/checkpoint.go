@@ -2,6 +2,7 @@ package checkpoint
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/alevinval/ledger/internal/base"
 	"github.com/alevinval/ledger/internal/storage"
@@ -14,19 +15,15 @@ var (
 	logger = log.GetLogger()
 )
 
-const (
-	// CustomOffset reads from a specific offset onwards.
-	CustomOffset OffsetMode = iota
-	// EarliestOffset reads from earliest possible offset onwards.
-	EarliestOffset
-)
-
-type OffsetMode byte
-
 type Checkpoint struct {
 	key     []byte
 	storage *storage.Storage
 	opts    *base.Options
+
+	mu struct {
+		sync.RWMutex
+		commitCp *proto.Checkpoint // Cache instance for comitting without allocation
+	}
 }
 
 func NewCheckpoint(basePrefix string, s *storage.Storage, opts *base.Options) *Checkpoint {
@@ -34,10 +31,20 @@ func NewCheckpoint(basePrefix string, s *storage.Storage, opts *base.Options) *C
 		key:     buildCheckpointKey(basePrefix),
 		storage: s,
 		opts:    opts,
+
+		mu: struct {
+			sync.RWMutex
+			commitCp *proto.Checkpoint
+		}{
+			commitCp: &proto.Checkpoint{},
+		},
 	}
 }
 
 func (c *Checkpoint) GetCheckpoint() (*proto.Checkpoint, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	cp := &proto.Checkpoint{}
 	err := c.storage.Get(c.key, cp)
 	return cp, err
@@ -51,14 +58,14 @@ func (c *Checkpoint) GetCheckpointFrom(other *Checkpoint) (*proto.Checkpoint, er
 	}
 
 	switch c.opts.Offset {
+	case base.LatestOffset:
+		// Nothing to do
 	case base.EarliestOffset:
 		cp.Offset = 0
 	case base.CustomOffset:
 		if c.opts.CustomOffset < cp.Offset {
 			cp.Offset = c.opts.CustomOffset
 		}
-	case base.LatestOffset:
-		// Nothing to do
 	default:
 		logger.Fatal("unknown checkpoint mode used", zap.String("mode", c.opts.Offset.String()))
 	}
@@ -66,10 +73,11 @@ func (c *Checkpoint) GetCheckpointFrom(other *Checkpoint) (*proto.Checkpoint, er
 }
 
 func (c *Checkpoint) Commit(offset uint64) error {
-	cp := &proto.Checkpoint{
-		Offset: offset,
-	}
-	return c.storage.Put(c.key, cp)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.mu.commitCp.Offset = offset
+	return c.storage.Put(c.key, c.mu.commitCp)
 }
 
 func buildCheckpointKey(prefix string) []byte {

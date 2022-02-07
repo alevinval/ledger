@@ -3,12 +3,12 @@ package base
 import "time"
 
 const (
-	// CustomOffset reads from a specific offset onwards.
-	CustomOffset OffsetMode = iota
+	// LatestOffset reads from latest write offset onwards.
+	LatestOffset OffsetMode = iota
 	// EarliestOffset reads from earliest possible offset onwards.
 	EarliestOffset
-	// LatestOffset reads from latest write offset onwards.
-	LatestOffset
+	// CustomOffset reads from a specific offset onwards.
+	CustomOffset
 )
 
 type (
@@ -33,12 +33,12 @@ type (
 
 func (m OffsetMode) String() string {
 	switch m {
-	case CustomOffset:
-		return "custom"
-	case EarliestOffset:
-		return "earliest"
 	case LatestOffset:
 		return "latest"
+	case EarliestOffset:
+		return "earliest"
+	case CustomOffset:
+		return "custom"
 	default:
 		return "unknown"
 	}
