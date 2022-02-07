@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "pkg/proto";
+
+message Checkpoint {
+  uint64 offset = 1;
+}
