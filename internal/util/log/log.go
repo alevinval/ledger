@@ -10,6 +10,7 @@ func GetLogger() *zap.Logger {
 	config := zap.NewProductionConfig()
 	config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	config.DisableCaller = true
+	config.DisableStacktrace = true
 	config.OutputPaths = []string{"stdout"}
 	config.EncoderConfig.TimeKey = ""
 

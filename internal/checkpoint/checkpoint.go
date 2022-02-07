@@ -12,6 +12,8 @@ import (
 )
 
 var (
+	ErrUnknownOffsetMode = fmt.Errorf("unknown offset mode")
+
 	logger = log.GetLogger()
 )
 
@@ -22,7 +24,7 @@ type Checkpoint struct {
 
 	mu struct {
 		sync.RWMutex
-		commitCp *proto.Checkpoint // Cache instance for comitting without allocation
+		commitCp *proto.Checkpoint // Instance for zero-allocation commits
 	}
 }
 
@@ -46,20 +48,18 @@ func (c *Checkpoint) GetCheckpoint() (*proto.Checkpoint, error) {
 	defer c.mu.RUnlock()
 
 	cp := &proto.Checkpoint{}
-	err := c.storage.Get(c.key, cp)
-	return cp, err
+	return cp, c.storage.Get(c.key, cp)
 }
 
 func (c *Checkpoint) GetCheckpointFrom(other *Checkpoint) (*proto.Checkpoint, error) {
 	cp, err := other.GetCheckpoint()
 	if err != nil {
-		logger.Error("cannot get checkpoint from ", zap.ByteString("from", other.key), zap.ByteString("to", c.key))
+		logger.Error("error getting checkpoint from other", zap.ByteString("from", other.key), zap.ByteString("to", c.key), zap.String("error", err.Error()))
 		return cp, err
 	}
 
 	switch c.opts.Offset {
 	case base.LatestOffset:
-		// Nothing to do
 	case base.EarliestOffset:
 		cp.Offset = 0
 	case base.CustomOffset:
@@ -67,7 +67,8 @@ func (c *Checkpoint) GetCheckpointFrom(other *Checkpoint) (*proto.Checkpoint, er
 			cp.Offset = c.opts.CustomOffset
 		}
 	default:
-		logger.Fatal("unknown checkpoint mode used", zap.String("mode", c.opts.Offset.String()))
+		logger.Error("unknown checkpoint mode used", zap.Reflect("value", c.opts.Offset))
+		return cp, ErrUnknownOffsetMode
 	}
 	return cp, err
 }
@@ -75,6 +76,10 @@ func (c *Checkpoint) GetCheckpointFrom(other *Checkpoint) (*proto.Checkpoint, er
 func (c *Checkpoint) Commit(offset uint64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+
+	if offset < c.mu.commitCp.Offset {
+		logger.Warn("commiting checkpoint backwards", zap.Uint64("from", c.mu.commitCp.Offset), zap.Uint64("to", offset))
+	}
 
 	c.mu.commitCp.Offset = offset
 	return c.storage.Put(c.key, c.mu.commitCp)
