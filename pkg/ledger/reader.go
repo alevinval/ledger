@@ -8,6 +8,7 @@ import (
 
 	"github.com/alevinval/ledger/internal/checkpoint"
 	"github.com/alevinval/ledger/internal/log"
+	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
 
@@ -86,31 +87,23 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 	}
 
 	w.writerListener.notifyReader(r)
+
 	logger.Info("reader created", zap.String("id", id), zap.String("basePrefix", basePrefix))
 	return r, nil
 }
 
 func (r *Reader) initialise() error {
-	// Ensure a checkpoint exists before anything else
-	_, notFoundErr := r.checkpoint.GetCheckpoint()
-	if notFoundErr != nil {
-
-		// In this case, figure out which offset should be committed
-		// based on the configured options (custom, earliest, latest...)
-		cp, err := r.checkpoint.GetCheckpointFrom(r.writer.checkpoint)
-		if err == nil {
-			err = r.checkpoint.Commit(cp.Offset)
-			if err != nil {
-				logger.Error("cannot initialise reader: cannot commit offset", zap.Error(err))
-				return err
-			}
-		} else {
-			// This should never happen, if it does the underlying storage
-			// may have issues
-			logger.Error("cannot initialise reader: cannot create starting checkpoint", zap.Error(err))
+	_, err := r.checkpoint.GetCheckpoint()
+	if err == badger.ErrKeyNotFound {
+		err = r.commitInitialCheckpoint()
+		if err != nil {
+			logger.Error("cannot initialise reader", zap.Error(err))
 			return err
 		}
+	} else {
+		logger.Error("cannot initialise reader: cannot get current checkpoint", zap.Error(err))
 	}
+
 	go r.fetcher()
 	r.doTriggerFetch()
 
@@ -149,6 +142,24 @@ func (r *Reader) Close() {
 	fireAndWait(r.fetcherClose, r.fetcherCloseNotify)
 	close(r.messages)
 	r.isClosed = true
+}
+
+// commitInitialOffset commits the reader offset for the first time
+func (r *Reader) commitInitialCheckpoint() error {
+	initialCheckpoint, err := r.checkpoint.GetCheckpointFrom(r.writer.checkpoint)
+
+	if err != nil {
+		logger.Error("cannot commit initial checkpoint", zap.Error(err))
+		return err
+	}
+
+	err = r.checkpoint.Commit(initialCheckpoint.Offset)
+	if err != nil {
+		logger.Error("cannot commit initial checkpoint", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
 
 func (r *Reader) doTriggerFetch() (isClosed bool) {
