@@ -188,17 +188,18 @@ func (r *Reader) fetch() {
 	r.writer.storage.ScanKeysIndexed(r.writeScanKey, r.fetchStartOffset, func(k []byte, offset uint64) (err error) {
 		value, err := r.writer.storage.GetBytes(k)
 		if err != nil {
+			logger.Error("failed scanning keys", zap.String("id", r.id), zap.Error(err))
 			return
 		}
 
 		select {
 		case r.messages <- &Message{offset, value}:
 			r.fetchStartOffset = offset
+			return
 		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
 			logger.Warn("reader delivery timeout: make sure messages are being consumed", zap.String("id", r.id))
 			return
 		}
-		return
 	})
 }
 
