@@ -17,6 +17,10 @@ Ledger can be used to ensure all events that reach your application
 are handled without a loss (in-process), plans for the future could
 involve a distributed ledger.
 
+## Development
+
+Running tests with `go test --tags debug ...` will enable debug level logging
+
 ## Re-generating protos
 
 Make sure you have `protoc-gen-go` and `protoc-gen-go-grpc`, follow this guide:

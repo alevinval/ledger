@@ -7,7 +7,7 @@ import (
 	"strconv"
 
 	"github.com/alevinval/ledger/internal/base"
-	"github.com/alevinval/ledger/internal/util/log"
+	"github.com/alevinval/ledger/internal/log"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"

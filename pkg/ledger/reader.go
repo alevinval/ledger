@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/alevinval/ledger/internal/checkpoint"
-	"github.com/alevinval/ledger/internal/util/log"
+	"github.com/alevinval/ledger/internal/log"
 	"go.uber.org/zap"
 )
 

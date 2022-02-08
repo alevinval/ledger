@@ -1,3 +1,5 @@
+//go:build !debug
+
 package log
 
 import (
@@ -6,11 +8,11 @@ import (
 	"go.uber.org/zap"
 )
 
-func GetLogger() *zap.Logger {
+func newZapLogger(level zap.AtomicLevel) *zap.Logger {
 	config := zap.NewProductionConfig()
-	config.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	config.DisableCaller = true
 	config.DisableStacktrace = true
+	config.Level = level
 	config.OutputPaths = []string{"stdout"}
 	config.EncoderConfig.TimeKey = ""
 

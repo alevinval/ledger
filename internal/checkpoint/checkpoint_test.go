@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alevinval/ledger/internal/base"
+	"github.com/alevinval/ledger/internal/log"
 	"github.com/alevinval/ledger/internal/storage"
 	"github.com/alevinval/ledger/internal/testutils"
 	"github.com/dgraph-io/badger/v3"
@@ -16,14 +17,14 @@ import (
 var defaultOpts = base.DefaultOptions()
 
 func captureLogs(level zapcore.Level) (logs *observer.ObservedLogs, restore func()) {
-	originalLogger := logger
+	originalLogger := logger.GetZapLogger()
 	restoreOriginalLogger := func() {
-		logger = originalLogger
+		log.SetZapLogger(originalLogger)
 	}
 
 	core, logs := observer.New(zap.WarnLevel)
 	newLogger := zap.New(core)
-	logger = newLogger
+	log.SetZapLogger(newLogger)
 	return logs, restoreOriginalLogger
 }
 

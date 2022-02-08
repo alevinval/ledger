@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/alevinval/ledger/internal/base"
+	"github.com/alevinval/ledger/internal/log"
 	"github.com/alevinval/ledger/internal/storage"
-	"github.com/alevinval/ledger/internal/util/log"
 	"github.com/alevinval/ledger/pkg/proto"
 	"go.uber.org/zap"
 )

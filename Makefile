@@ -7,4 +7,3 @@ compile-protos:
 		--go-grpc_out=. \
 		--go-grpc_opt=paths=source_relative \
 		pkg/proto/*.proto
-
