@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -9,6 +10,10 @@ import (
 	"github.com/alevinval/ledger/internal/storage"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
+)
+
+var (
+	ErrClosedWriter = errors.New("writer is closed")
 )
 
 var (
@@ -86,6 +91,13 @@ func (w *Writer) initialise() (err error) {
 
 // Write a payload to the log, updates writer offset.
 func (w *Writer) Write(message []byte) (uint64, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	if w.isClosed {
+		return 0, ErrClosedWriter
+	}
+
 	var idx uint64
 
 	idx, err := w.writeSeq.Next()
@@ -110,18 +122,6 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 		return 0, err
 	}
 
-	defer func() {
-		w.mu.RLock()
-		defer w.mu.RUnlock()
-
-		// If the writer has been closed we should not notify anything, the listener
-		// has been closed to avoid leaking the go-routine, so this avoids the panic from
-		// sending on a closed channel.
-		if !w.isClosed {
-			w.writerListener.notifyWrite()
-		}
-	}()
-
 	err = w.checkpoint.Commit(idx)
 	if err != nil {
 		logger.Error("failed committing write", zap.String("id", w.id), zap.Uint64("offset", idx))
@@ -129,6 +129,9 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 	}
 
 	logger.Debug("committed write", zap.String("id", w.id), zap.Uint64("offset", idx))
+
+	defer w.writerListener.notifyWrite()
+
 	return idx, nil
 }
 
