@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"github.com/alevinval/ledger/internal/base"
 	"go.uber.org/zap"
 )
 
@@ -8,7 +9,7 @@ import (
 type PartitionedReader struct {
 	id         string
 	partitions int
-	out        chan *PartitionedMessage
+	out        chan base.PartitionedMessage
 	readers    []*Reader
 }
 
@@ -23,7 +24,7 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 		id:         readerID,
 		readers:    readers,
 		partitions: pw.partitions,
-		out:        make(chan *PartitionedMessage, 1),
+		out:        make(chan base.PartitionedMessage, 1),
 	}
 
 	err = r.startFetcher()
@@ -35,7 +36,7 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 	return r, nil
 }
 
-func (r *PartitionedReader) Read() (<-chan *PartitionedMessage, error) {
+func (r *PartitionedReader) Read() (<-chan base.PartitionedMessage, error) {
 	return r.out, nil
 }
 
@@ -63,7 +64,7 @@ func (r *PartitionedReader) startFetcher() error {
 	return nil
 }
 
-func (r *PartitionedReader) fetcher(channels []<-chan *Message) {
+func (r *PartitionedReader) fetcher(channels []<-chan base.Message) {
 	for {
 		for i := range channels {
 			msg, open := <-channels[i]
@@ -71,10 +72,10 @@ func (r *PartitionedReader) fetcher(channels []<-chan *Message) {
 				logger.Debug("stopping partitioned reader fetcher", zap.String("id", r.id))
 				return
 			}
-			r.out <- &PartitionedMessage{
-				Partition: r.readers[i].checkpoint,
-				Offset:    msg.Offset,
-				Data:      msg.Data,
+			r.out <- &partitionedMessageImpl{
+				partition: r.readers[i].checkpoint,
+				offset:    msg.Offset(),
+				data:      msg.Data(),
 			}
 		}
 	}

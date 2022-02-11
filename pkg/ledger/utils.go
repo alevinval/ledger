@@ -1,6 +1,10 @@
 package ledger
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/alevinval/ledger/internal/base"
+)
 
 type emptyObj = struct{}
 
@@ -41,8 +45,8 @@ func getSortedReaders(readers []*Reader) (sortedReaders []*Reader, anyErr error)
 	return
 }
 
-func getChannelsForReaders(readers []*Reader) ([]<-chan *Message, error) {
-	channels := make([]<-chan *Message, len(readers))
+func getChannelsForReaders(readers []*Reader) ([]<-chan base.Message, error) {
+	channels := make([]<-chan base.Message, len(readers))
 	for i, reader := range readers {
 		ch, err := reader.Read()
 		if err != nil {

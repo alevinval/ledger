@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alevinval/ledger/internal/base"
 	"github.com/alevinval/ledger/internal/checkpoint"
 	"github.com/alevinval/ledger/internal/log"
 	"github.com/dgraph-io/badger/v3"
@@ -27,28 +28,10 @@ type (
 		checkpoint       *checkpoint.Checkpoint
 		writer           *Writer
 
-		messages           chan *Message
+		messages           chan base.Message
 		triggerFetch       chan emptyObj
 		fetcherClose       chan emptyObj
 		fetcherCloseNotify chan emptyObj
-	}
-
-	// Message structure used to represent read results
-	Message struct {
-		Offset uint64
-		Data   []byte
-	}
-
-	// PartitionedMessage structure that represents messages from a partitioned reader
-	PartitionedMessage struct {
-		Partition Commitable
-		Offset    uint64
-		Data      []byte
-	}
-
-	// Commitable interface
-	Commitable interface {
-		Commit(uint64) error
 	}
 )
 
@@ -74,7 +57,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 		opts:         opts,
 		writer:       w,
 
-		messages:           make(chan *Message),
+		messages:           make(chan base.Message),
 		triggerFetch:       make(chan emptyObj, 1),
 		fetcherClose:       make(chan emptyObj),
 		fetcherCloseNotify: make(chan emptyObj),
@@ -113,7 +96,7 @@ func (r *Reader) initialise() error {
 // Read the ledger, returns a channel where messages can be received
 // by the consumer of this API.
 // An error is returned in case the Reader is already closed.
-func (r *Reader) Read() (<-chan *Message, error) {
+func (r *Reader) Read() (<-chan base.Message, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -193,7 +176,7 @@ func (r *Reader) fetch() {
 		}
 
 		select {
-		case r.messages <- &Message{offset, value}:
+		case r.messages <- &messageImpl{offset, value}:
 			r.fetchStartOffset = offset
 			return
 		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
