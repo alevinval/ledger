@@ -1,6 +1,12 @@
 package ledger
 
-import "github.com/alevinval/ledger/internal/checkpoint"
+import (
+	"github.com/alevinval/ledger/internal/base"
+	"github.com/alevinval/ledger/internal/checkpoint"
+)
+
+var _ base.Message = (*messageImpl)(nil)
+var _ base.PartitionedMessage = (*partitionedMessageImpl)(nil)
 
 type (
 	messageImpl struct {
