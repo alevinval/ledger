@@ -1,8 +1,8 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -12,6 +12,11 @@ import (
 	"github.com/alevinval/ledger/pkg/proto"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
+)
+
+var (
+	// ErrClosedReader is returned when attempting to read from a closed Reader
+	ErrClosedReader = errors.New("reader is closed")
 )
 
 var (
@@ -47,7 +52,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 	defer w.mu.RUnlock()
 
 	if w.isClosed {
-		return nil, io.ErrClosedPipe
+		return nil, ErrClosedWriter
 	}
 
 	basePrefix := fmt.Sprintf("ledger-%s-reader-%s", w.id, id)
@@ -102,7 +107,7 @@ func (r *Reader) Read() (<-chan base.Message, error) {
 	defer r.mu.RUnlock()
 
 	if r.isClosed {
-		return nil, io.ErrClosedPipe
+		return nil, ErrClosedReader
 	}
 
 	return r.messages, nil
