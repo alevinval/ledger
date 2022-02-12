@@ -1,5 +1,9 @@
 .PHONY=compile-protos
 
+cover:
+	go test ./... -count=1 -cover -coverprofile coverage
+	go tool cover -html coverage
+
 compile-protos:
 	protoc \
 		--go_out=. \
