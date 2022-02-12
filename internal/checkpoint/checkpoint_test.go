@@ -4,29 +4,14 @@ import (
 	"testing"
 
 	"github.com/alevinval/ledger/internal/base"
-	"github.com/alevinval/ledger/internal/log"
 	"github.com/alevinval/ledger/internal/storage"
 	"github.com/alevinval/ledger/internal/testutils"
 	"github.com/dgraph-io/badger/v3"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 )
 
 var defaultOpts = base.DefaultOptions()
-
-func captureLogs(level zapcore.Level) (logs *observer.ObservedLogs, restore func()) {
-	originalLogger := logger.GetZapLogger()
-	restoreOriginalLogger := func() {
-		log.SetZapLogger(originalLogger)
-	}
-
-	core, logs := observer.New(zap.WarnLevel)
-	newLogger := zap.New(core)
-	log.SetZapLogger(newLogger)
-	return logs, restoreOriginalLogger
-}
 
 func TestCheckpoint_keyMatchesPrefix(t *testing.T) {
 	withCheckpoint("prefix", defaultOpts, func(checkpoint *Checkpoint) {
@@ -69,7 +54,7 @@ func TestCheckpointCommit_getCheckpointGivesCommittedValue(t *testing.T) {
 }
 
 func TestCheckpointCommit_warnBackwardsCommit(t *testing.T) {
-	logs, restore := captureLogs(zap.WarnLevel)
+	logs, restore := testutils.CaptureLogs(zap.WarnLevel)
 	defer restore()
 
 	withCheckpoint("prefix", defaultOpts, func(checkpoint *Checkpoint) {

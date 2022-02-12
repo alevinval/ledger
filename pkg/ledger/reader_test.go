@@ -4,25 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alevinval/ledger/internal/log"
 	"github.com/alevinval/ledger/internal/testutils"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 )
-
-func captureLogs(level zapcore.Level) (logs *observer.ObservedLogs, restore func()) {
-	originalLogger := logger.GetZapLogger()
-	restoreOriginalLogger := func() {
-		log.SetZapLogger(originalLogger)
-	}
-
-	core, logs := observer.New(zap.WarnLevel)
-	newLogger := zap.New(core)
-	log.SetZapLogger(newLogger)
-	return logs, restoreOriginalLogger
-}
 
 func TestNewReader_fromClosedWriter(t *testing.T) {
 	withWriter(t, func(writer *Writer) {
@@ -63,21 +48,19 @@ func TestReader_readWritesWithoutAutoCommit(t *testing.T) {
 }
 
 func TestReader_slowReads(t *testing.T) {
-	logs, restore := captureLogs(zap.WarnLevel)
+	logs, restore := testutils.CaptureLogs(zap.WarnLevel)
 	defer restore()
 
 	withReader(t, func(writer *Writer, reader *Reader) {
-		reader.opts.DeliveryTimeout = 10
+		// Set extremely low read shortTimeout
+		shortTimeout := 10 * time.Millisecond
+		reader.opts.DeliveryTimeout = shortTimeout
 
 		testutils.AssertWrites(t, writer, "one", "two", "three")
-
-		time.AfterFunc(2*reader.opts.DeliveryTimeout*time.Millisecond, func() {
-			testutils.AssertWrites(t, writer, "asd")
-		})
-
 		testutils.AssertReads(t, reader, "one", "two", "three")
 
-		time.Sleep(250 * time.Millisecond)
+		testutils.AssertWrites(t, writer, "asd")
+		time.Sleep(2 * shortTimeout)
 		testutils.AssertReads(t, reader, "asd")
 
 		assert.Greater(t, logs.Len(), 0)
