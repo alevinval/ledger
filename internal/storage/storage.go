@@ -83,7 +83,7 @@ func (s *Storage) ScanKeysIndexed(
 	startOffset uint64,
 	fn func(key []byte, offset uint64) (err error),
 ) error {
-	return s.DB.Update(func(txn *badger.Txn) error {
+	return s.DB.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = false
 		it := txn.NewIterator(opts)
