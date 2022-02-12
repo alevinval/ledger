@@ -1,6 +1,7 @@
 package checkpoint
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	ErrUnknownOffsetMode = fmt.Errorf("unknown offset mode")
+	ErrUnknownOffsetMode = errors.New("unknown offset mode")
 
 	logger = log.GetLogger()
 )
