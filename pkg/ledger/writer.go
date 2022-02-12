@@ -8,6 +8,7 @@ import (
 
 	"github.com/alevinval/ledger/internal/checkpoint"
 	"github.com/alevinval/ledger/internal/storage"
+	"github.com/alevinval/ledger/pkg/proto"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
@@ -133,6 +134,10 @@ func (w *Writer) Write(message []byte) (uint64, error) {
 	defer w.writerListener.notifyWrite()
 
 	return idx, nil
+}
+
+func (w *Writer) GetCheckpoint() (*proto.Checkpoint, error) {
+	return w.checkpoint.GetCheckpoint()
 }
 
 // Close the writer by releasing the sequence. Not releasing the sequence

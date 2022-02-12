@@ -9,6 +9,7 @@ import (
 	"github.com/alevinval/ledger/internal/base"
 	"github.com/alevinval/ledger/internal/checkpoint"
 	"github.com/alevinval/ledger/internal/log"
+	"github.com/alevinval/ledger/pkg/proto"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
@@ -105,6 +106,11 @@ func (r *Reader) Read() (<-chan base.Message, error) {
 	}
 
 	return r.messages, nil
+}
+
+// GetCheckpoint returns the current checkpoint of the reader
+func (r *Reader) GetCheckpoint() (*proto.Checkpoint, error) {
+	return r.checkpoint.GetCheckpoint()
 }
 
 // Commit the offset, creates a new checkpoint to persist
