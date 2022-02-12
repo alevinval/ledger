@@ -5,8 +5,13 @@ import (
 	"time"
 
 	"github.com/alevinval/ledger/internal/base"
+	"github.com/alevinval/ledger/pkg/proto"
 	"github.com/stretchr/testify/assert"
 )
+
+type checkpointable interface {
+	GetCheckpoint() (*proto.Checkpoint, error)
+}
 
 type writer interface {
 	Write([]byte) (uint64, error)
@@ -19,6 +24,13 @@ type reader interface {
 
 type partitionedReader interface {
 	Read() (<-chan base.PartitionedMessage, error)
+}
+
+func AssertCheckpointAt(t *testing.T, c checkpointable, expected uint64) {
+	cp, err := c.GetCheckpoint()
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, cp.Offset)
 }
 
 func AssertWrites(t *testing.T, w writer, data ...string) {
@@ -35,14 +47,14 @@ func AssertReads(t *testing.T, r reader, expected ...string) {
 	assertReadsImpl(t, r, true, expected...)
 }
 
-// assert reads with auto-commits between reads.
-func AssertReadsPartitioned(t *testing.T, r partitionedReader, expected ...string) {
-	assertReadsPartitionedImpl(t, r, true, expected...)
-}
-
 // assert reads without auto-commits between reads.
 func AssertReadsNoCommit(t *testing.T, r reader, expected ...string) {
 	assertReadsImpl(t, r, false, expected...)
+}
+
+// assert reads with auto-commits between reads.
+func AssertReadsPartitioned(t *testing.T, r partitionedReader, expected ...string) {
+	assertReadsPartitionedImpl(t, r, true, expected...)
 }
 
 func assertReadsImpl(t *testing.T, r reader, autoCommit bool, expected ...string) {
@@ -63,6 +75,7 @@ func assertReadsImpl(t *testing.T, r reader, autoCommit bool, expected ...string
 	}
 }
 
+// TODO: when generics come out, we can merge assertReadsImpl and assertReadPartitionedImpl
 func assertReadsPartitionedImpl(t *testing.T, r partitionedReader, autoCommit bool, expected ...string) {
 	ch, err := r.Read()
 	assert.Nil(t, err)
