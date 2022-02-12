@@ -94,7 +94,6 @@ func (r *Reader) initialise() error {
 	}
 
 	go r.fetcher()
-	r.doTriggerFetch()
 
 	return nil
 }
@@ -110,6 +109,7 @@ func (r *Reader) Read() (<-chan base.Message, error) {
 		return nil, ErrClosedReader
 	}
 
+	r.doTriggerFetch()
 	return r.messages, nil
 }
 
