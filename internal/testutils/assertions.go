@@ -62,9 +62,9 @@ func assertReadsImpl(t *testing.T, r reader, autoCommit bool, expected ...string
 	assert.Nil(t, err)
 	for i := range expected {
 		select {
-		case actual := <-ch:
+		case actual, ok := <-ch:
 			assert.Equal(t, expected[i], string(actual.Data()))
-			if autoCommit {
+			if autoCommit && ok {
 				r.Commit(actual.Offset())
 			}
 		case <-time.After(100 * time.Millisecond):
