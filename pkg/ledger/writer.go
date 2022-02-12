@@ -14,6 +14,9 @@ import (
 )
 
 var (
+	// ErrClosedReader is returned when attempting to:
+	//  - Write to a closed Writer
+	//  - Get a Reader from a closed Writer
 	ErrClosedWriter = errors.New("writer is closed")
 )
 

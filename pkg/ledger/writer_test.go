@@ -73,6 +73,9 @@ func withWriter(t *testing.T, fn func(w *Writer)) {
 	testutils.WithDB(func(db *badger.DB) {
 		writer, err := NewWriter("writer", db)
 		assert.NoError(t, err)
+
+		defer writer.Close()
+
 		fn(writer)
 	})
 }
