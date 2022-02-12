@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alevinval/ledger/internal/base"
 	"github.com/alevinval/ledger/internal/testutils"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -33,7 +34,6 @@ func TestReader_readWrites(t *testing.T) {
 		testutils.AssertCheckpointAt(t, reader, 0)
 		testutils.AssertReads(t, reader, "one", "two", "three")
 		testutils.AssertCheckpointAt(t, reader, 3)
-		println("hey")
 	})
 }
 
@@ -79,12 +79,101 @@ func TestReader_close(t *testing.T) {
 	})
 }
 
+// Test reader options
+
+func TestReader_readFromEarliestOffset(t *testing.T) {
+	opts := base.DefaultOptions()
+	opts.Offset = base.EarliestOffset
+
+	withWriter(t, func(writer *Writer) {
+		testutils.AssertWrites(t, writer, "one", "two")
+
+		// Create the reader now, after the log contains entries
+		// There is no checkpoint commited yet, so it will create
+		// an initial checkpoint using EarliestOffset mode
+		reader, err := writer.NewReaderOpts("reader", opts)
+		assert.NoError(t, err)
+
+		testutils.AssertWrites(t, writer, "three")
+		testutils.AssertReads(t, reader, "one", "two", "three")
+	})
+}
+
+func TestReader_readFromLatestOffset(t *testing.T) {
+	opts := base.DefaultOptions()
+	opts.Offset = base.LatestOffset
+
+	withWriter(t, func(writer *Writer) {
+		testutils.AssertWrites(t, writer, "one", "two")
+
+		// Create the reader now, after the log contains entries
+		// There is no checkpoint commited yet, so it will create
+		// an initial checkpoint using LatestOffset
+		reader, err := writer.NewReaderOpts("reader", opts)
+		assert.NoError(t, err)
+
+		testutils.AssertWrites(t, writer, "three")
+		testutils.AssertReads(t, reader, "three")
+	})
+}
+
+func TestReader_readFromCustomOffset(t *testing.T) {
+	opts := base.DefaultOptions()
+	opts.Offset = base.CustomOffset
+	opts.CustomOffset = 1
+
+	withWriter(t, func(writer *Writer) {
+		testutils.AssertWrites(t, writer, "one", "two")
+
+		// Create the reader now, after the log contains entries
+		// There is no checkpoint commited yet, so it will create
+		// an initial checkpoint using CustomOffset
+		reader, err := writer.NewReaderOpts("reader", opts)
+		assert.NoError(t, err)
+
+		testutils.AssertWrites(t, writer, "three")
+		testutils.AssertReads(t, reader, "two", "three")
+	})
+}
+
+func TestReader_readFromCustomOffsetGreaterThanMax(t *testing.T) {
+	opts := base.DefaultOptions()
+	opts.Offset = base.CustomOffset
+	opts.CustomOffset = 10
+
+	withWriter(t, func(writer *Writer) {
+		testutils.AssertWrites(t, writer, "one", "two")
+
+		reader, err := writer.NewReaderOpts("reader", opts)
+		assert.NoError(t, err)
+
+		testutils.AssertWrites(t, writer, "three")
+		testutils.AssertReads(t, reader, "three")
+	})
+}
+
+func TestReader_readFromSmallestBatchSize(t *testing.T) {
+	opts := base.DefaultOptions()
+	opts.Offset = base.EarliestOffset
+	opts.BatchSize = 1
+
+	withWriter(t, func(writer *Writer) {
+		testutils.AssertWrites(t, writer, "one", "two", "three")
+
+		reader, err := writer.NewReaderOpts("reader", opts)
+		assert.NoError(t, err)
+
+		testutils.AssertWrites(t, writer, "four")
+		testutils.AssertReads(t, reader, "one", "two", "three", "four")
+	})
+}
+
 func withReader(t *testing.T, fn func(w *Writer, r *Reader)) {
 	withWriter(t, func(writer *Writer) {
 		reader, err := writer.NewReader("reader")
-		defer reader.Close()
-
 		assert.NoError(t, err)
+
+		defer reader.Close()
 
 		fn(writer, reader)
 	})
