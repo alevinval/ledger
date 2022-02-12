@@ -190,7 +190,7 @@ func (r *Reader) fetch() {
 		case r.messages <- &messageImpl{offset, value}:
 			r.fetchStartOffset = offset
 			return
-		case <-time.After(r.opts.DeliveryTimeout * time.Millisecond):
+		case <-time.After(r.opts.DeliveryTimeout):
 			logger.Warn("reader delivery timeout: make sure messages are being consumed", zap.String("id", r.id))
 			return
 		}

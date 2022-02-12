@@ -12,6 +12,9 @@ const (
 )
 
 type (
+	// OffsetMode to determine how the initial checkpoint will be created
+	OffsetMode byte
+
 	// Options to configure both ledger writer and reader.
 	Options struct {
 		// BatchSize is used for two things:
@@ -21,16 +24,14 @@ type (
 		BatchSize    uint64
 		CustomOffset uint64
 		// DeliveryTimeout defines how long fetch will wait trying to queue a message to be processed
-		// when the timeout is reached, the fetching is cancelled. Unit is milliseconds.
+		// when the timeout is reached, the fetching is cancelled.
 		DeliveryTimeout   time.Duration
 		Offset            OffsetMode
 		SequenceBandwidth uint64
 	}
-
-	// OffsetMode to determine how the initial checkpoint will be created
-	OffsetMode byte
 )
 
+// String returns a human readable offset mode
 func (m OffsetMode) String() string {
 	switch m {
 	case LatestOffset:
@@ -48,7 +49,7 @@ func (m OffsetMode) String() string {
 func DefaultOptions() *Options {
 	return &Options{
 		BatchSize:         1000,
-		DeliveryTimeout:   60000,
+		DeliveryTimeout:   60 * time.Second,
 		Offset:            LatestOffset,
 		SequenceBandwidth: 1000,
 	}
