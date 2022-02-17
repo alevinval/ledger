@@ -2,7 +2,9 @@ package ledger
 
 import (
 	"fmt"
+	"sync"
 
+	"github.com/alevinval/ledger/internal/base"
 	"github.com/dgraph-io/badger/v3"
 	"go.uber.org/zap"
 )
@@ -11,9 +13,12 @@ import (
 type PartitionedWriter struct {
 	id         string
 	partitions int
-	current    int
-	writers    []*Writer
-	db         *badger.DB
+	isClosed   bool
+
+	mu       sync.RWMutex
+	selector base.PartitionSelector
+	writers  []*Writer
+	db       *badger.DB
 }
 
 func NewPartitionedWriter(id string, db *badger.DB, partitions int) (*PartitionedWriter, error) {
@@ -31,7 +36,7 @@ func NewPartitionedWriter(id string, db *badger.DB, partitions int) (*Partitione
 	pw := &PartitionedWriter{
 		id:         id,
 		partitions: partitions,
-		current:    -1,
+		selector:   base.PartitionSelector{Size: partitions},
 		db:         db,
 		writers:    writers,
 	}
@@ -41,16 +46,33 @@ func NewPartitionedWriter(id string, db *badger.DB, partitions int) (*Partitione
 	return pw, nil
 }
 
-func (w *PartitionedWriter) Write(message []byte) (uint64, error) {
-	return w.writers[w.next()].Write(message)
+func (pw *PartitionedWriter) Write(message []byte) (uint64, error) {
+	pw.mu.RLock()
+	defer pw.mu.RUnlock()
+
+	if pw.isClosed {
+		return 0, ErrClosedWriter
+	}
+
+	return pw.writers[pw.selector.Next()].Write(message)
 }
 
-func (w *PartitionedWriter) next() int {
-	w.current++
-	if w.current >= w.partitions {
-		w.current = 0
+func (pw *PartitionedWriter) GetPartitions() int {
+	return pw.partitions
+}
+
+func (pw *PartitionedWriter) Close() {
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+
+	if pw.isClosed {
+		return
 	}
-	return w.current
+
+	for _, writer := range pw.writers {
+		writer.Close()
+	}
+	pw.isClosed = true
 }
 
 func (pw *PartitionedWriter) logInfo() {

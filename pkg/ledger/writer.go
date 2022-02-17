@@ -30,9 +30,10 @@ var (
 // using a BadgerDB Sequence which yields monotonically increasing
 // integers.
 type Writer struct {
-	id             string
-	basePrefix     string
-	isClosed       bool
+	id         string
+	basePrefix string
+	isClosed   bool
+
 	mu             sync.RWMutex
 	checkpoint     *checkpoint.Checkpoint
 	storage        *storage.Storage

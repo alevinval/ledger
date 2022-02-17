@@ -17,6 +17,11 @@ type writer interface {
 	Write([]byte) (uint64, error)
 }
 
+type partitionedWriter interface {
+	writer
+	GetPartitions() int
+}
+
 type reader interface {
 	Read() (<-chan base.Message, error)
 	Commit(uint64) error
@@ -40,6 +45,14 @@ func AssertWrites(t *testing.T, w writer, data ...string) {
 		assert.NoError(t, err)
 	}
 	time.Sleep(100 * time.Millisecond)
+}
+
+func AssertPartitionedWritesAtOffset(t *testing.T, pw partitionedWriter, expectedOffset uint64) {
+	for i := 0; i < pw.GetPartitions(); i++ {
+		idx, err := pw.Write([]byte("some-data"))
+		assert.NoError(t, err)
+		assert.Equal(t, expectedOffset, idx)
+	}
 }
 
 // assert reads with auto-commits between reads.
