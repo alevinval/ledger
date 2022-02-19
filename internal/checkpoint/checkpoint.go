@@ -19,7 +19,6 @@ var (
 )
 
 type Checkpoint struct {
-	key     []byte
 	storage *storage.Storage
 	opts    *base.Options
 
@@ -27,6 +26,8 @@ type Checkpoint struct {
 		sync.RWMutex
 		commitCp *proto.Checkpoint // Instance for zero-allocation commits
 	}
+
+	key []byte
 }
 
 func NewCheckpoint(basePrefix string, s *storage.Storage, opts *base.Options) *Checkpoint {

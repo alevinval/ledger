@@ -1,11 +1,11 @@
 package ledger
 
 type writerListener struct {
-	readers            map[string]*Reader
-	newReader          chan *Reader
-	newWrite           chan emptyObj
 	closeManager       chan emptyObj
 	closeManagerNotify chan emptyObj
+	newReader          chan *Reader
+	newWrite           chan emptyObj
+	readers            map[string]*Reader
 }
 
 func (l *writerListener) notifyWrite() {

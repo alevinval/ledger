@@ -19,7 +19,7 @@ func TestPartitionedWriteAndRead(t *testing.T) {
 		defer pr.Close()
 
 		testutils.AssertWrites(t, pw, "first", "second", "third", "fourth")
-		testutils.AssertReadsPartitioned(t, pr, "first", "second", "third", "fourth", "")
+		testutils.AssertReads(t, pr, "first", "second", "third", "fourth", "")
 	})
 }
 
@@ -32,14 +32,14 @@ func TestPartitionedWriteAndReadTwoSequence(t *testing.T) {
 		assert.Nil(t, err)
 
 		testutils.AssertWrites(t, writer, "first", "second", "third", "fourth")
-		testutils.AssertReadsPartitioned(t, reader, "first", "second", "third", "fourth", "")
+		testutils.AssertReads(t, reader, "first", "second", "third", "fourth", "")
 		reader.Close()
 
 		reader, err = writer.NewReader("client-1")
 		assert.Nil(t, err)
 
 		testutils.AssertWrites(t, writer, "fifth")
-		testutils.AssertReadsPartitioned(t, reader, "fifth", "")
+		testutils.AssertReads(t, reader, "fifth", "")
 		reader.Close()
 	})
 }

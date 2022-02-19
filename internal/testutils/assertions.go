@@ -24,11 +24,6 @@ type partitionedWriter interface {
 
 type reader interface {
 	Read() (<-chan base.Message, error)
-	Commit(uint64) error
-}
-
-type partitionedReader interface {
-	Read() (<-chan base.PartitionedMessage, error)
 }
 
 func AssertCheckpointAt(t *testing.T, c checkpointable, expected uint64) {
@@ -65,11 +60,6 @@ func AssertReadsNoCommit(t *testing.T, r reader, expected ...string) {
 	assertReadsImpl(t, r, false, expected...)
 }
 
-// assert reads with auto-commits between reads.
-func AssertReadsPartitioned(t *testing.T, r partitionedReader, expected ...string) {
-	assertReadsPartitionedImpl(t, r, true, expected...)
-}
-
 func assertReadsImpl(t *testing.T, r reader, autoCommit bool, expected ...string) {
 	ch, err := r.Read()
 	assert.Nil(t, err)
@@ -78,27 +68,7 @@ func assertReadsImpl(t *testing.T, r reader, autoCommit bool, expected ...string
 		case actual, ok := <-ch:
 			assert.Equal(t, expected[i], string(actual.Data()))
 			if autoCommit && ok {
-				r.Commit(actual.Offset())
-			}
-		case <-time.After(100 * time.Millisecond):
-			if expected[i] != "" {
-				assert.FailNowf(t, "missing-read", "expected %q, instead read timeout", expected[i])
-			}
-		}
-	}
-}
-
-// TODO: when generics come out, we can merge assertReadsImpl and assertReadPartitionedImpl
-func assertReadsPartitionedImpl(t *testing.T, r partitionedReader, autoCommit bool, expected ...string) {
-	ch, err := r.Read()
-	assert.Nil(t, err)
-	for i := range expected {
-		select {
-		case actual := <-ch:
-			assert.Equal(t, expected[i], string(actual.Data()))
-			if autoCommit {
-				err := actual.Commit()
-				assert.NoError(t, err)
+				actual.Commit()
 			}
 		case <-time.After(100 * time.Millisecond):
 			if expected[i] != "" {

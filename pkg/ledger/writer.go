@@ -30,15 +30,16 @@ var (
 // using a BadgerDB Sequence which yields monotonically increasing
 // integers.
 type Writer struct {
-	id         string
-	basePrefix string
-	isClosed   bool
+	mu sync.RWMutex
 
-	mu             sync.RWMutex
 	checkpoint     *checkpoint.Checkpoint
 	storage        *storage.Storage
 	writeSeq       *badger.Sequence
 	writerListener *writerListener
+
+	basePrefix string
+	id         string
+	isClosed   bool
 }
 
 // NewWriter creates a default ledger writer

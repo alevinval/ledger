@@ -1,16 +1,22 @@
 package ledger
 
 import (
+	"sync"
+
 	"github.com/alevinval/ledger/internal/base"
 	"go.uber.org/zap"
 )
 
 // PartitionedReader reads using a partition scheme
 type PartitionedReader struct {
+	mu sync.RWMutex
+
+	out        chan base.Message
 	id         string
-	partitions int
-	out        chan base.PartitionedMessage
 	readers    []*Reader
+	partitions int
+
+	isClosed   bool
 }
 
 func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, error) {
@@ -24,7 +30,7 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 		id:         readerID,
 		readers:    readers,
 		partitions: pw.partitions,
-		out:        make(chan base.PartitionedMessage, 1),
+		out:        make(chan base.Message, 1),
 	}
 
 	err = r.startFetcher()
@@ -36,11 +42,23 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 	return r, nil
 }
 
-func (r *PartitionedReader) Read() (<-chan base.PartitionedMessage, error) {
+func (r *PartitionedReader) Read() (<-chan base.Message, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if r.isClosed {
+		return nil, ErrClosedReader
+	}
+
 	return r.out, nil
 }
 
 func (r *PartitionedReader) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.isClosed = true
+
 	for i := range r.readers {
 		r.readers[i].Close()
 	}
@@ -72,10 +90,10 @@ func (r *PartitionedReader) fetcher(channels []<-chan base.Message) {
 				logger.Debug("stopping partitioned reader fetcher", zap.String("id", r.id))
 				return
 			}
-			r.out <- &partitionedMessageImpl{
-				partition: r.readers[i].checkpoint,
-				offset:    msg.Offset(),
-				data:      msg.Data(),
+			r.out <- &messageImpl{
+				chk:    r.readers[i].checkpoint,
+				data:   msg.Data(),
+				offset: msg.Offset(),
 			}
 		}
 	}

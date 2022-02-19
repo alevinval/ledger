@@ -25,19 +25,21 @@ var (
 
 type (
 	Reader struct {
-		id               string
-		isClosed         bool
-		fetchStartOffset uint64
-		writeScanKey     []byte
-		mu               sync.RWMutex
-		opts             *Options
-		checkpoint       *checkpoint.Checkpoint
-		writer           *Writer
+		mu sync.RWMutex
 
-		messages           chan base.Message
-		triggerFetch       chan emptyObj
+		checkpoint *checkpoint.Checkpoint
+		opts       *Options
+		writer     *Writer
+
 		fetcherClose       chan emptyObj
 		fetcherCloseNotify chan emptyObj
+		messages           chan base.Message
+		triggerFetch       chan emptyObj
+
+		id               string
+		writeScanKey     []byte
+		fetchStartOffset uint64
+		isClosed         bool
 	}
 )
 
@@ -118,12 +120,6 @@ func (r *Reader) GetCheckpoint() (*proto.Checkpoint, error) {
 	return r.checkpoint.GetCheckpoint()
 }
 
-// Commit the offset, creates a new checkpoint to persist
-// lastest ID that has been processed by the Reader.
-func (r *Reader) Commit(offset uint64) error {
-	return r.checkpoint.Commit(offset)
-}
-
 // Close the reader and stop fetching records.
 func (r *Reader) Close() {
 	r.mu.Lock()
@@ -187,7 +183,7 @@ func (r *Reader) fetch() {
 		}
 
 		select {
-		case r.messages <- &messageImpl{offset, value}:
+		case r.messages <- &messageImpl{r.checkpoint, value, offset}:
 			r.fetchStartOffset = offset
 			return
 		case <-time.After(r.opts.DeliveryTimeout):

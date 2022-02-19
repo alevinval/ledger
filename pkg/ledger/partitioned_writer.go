@@ -11,14 +11,16 @@ import (
 
 // PartitionedWriter writes using a partition scheme
 type PartitionedWriter struct {
-	id         string
-	partitions int
-	isClosed   bool
+	mu sync.RWMutex
 
-	mu       sync.RWMutex
-	selector base.PartitionSelector
-	writers  []*Writer
-	db       *badger.DB
+	db *badger.DB
+
+	id         string
+	writers    []*Writer
+	selector   base.PartitionSelector
+	partitions int
+
+	isClosed bool
 }
 
 func NewPartitionedWriter(id string, db *badger.DB, partitions int) (*PartitionedWriter, error) {

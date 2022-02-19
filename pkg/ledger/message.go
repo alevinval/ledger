@@ -6,17 +6,12 @@ import (
 )
 
 var _ base.Message = (*messageImpl)(nil)
-var _ base.PartitionedMessage = (*partitionedMessageImpl)(nil)
 
 type (
 	messageImpl struct {
-		offset uint64
+		chk    *checkpoint.Checkpoint
 		data   []byte
-	}
-	partitionedMessageImpl struct {
-		partition *checkpoint.Checkpoint
-		offset    uint64
-		data      []byte
+		offset uint64
 	}
 )
 
@@ -28,14 +23,6 @@ func (m *messageImpl) Data() []byte {
 	return m.data
 }
 
-func (pm *partitionedMessageImpl) Commit() error {
-	return pm.partition.Commit(pm.offset)
-}
-
-func (pm *partitionedMessageImpl) Offset() uint64 {
-	return pm.offset
-}
-
-func (pm *partitionedMessageImpl) Data() []byte {
-	return pm.data
+func (m *messageImpl) Commit() error {
+	return m.chk.Commit(m.offset)
 }
