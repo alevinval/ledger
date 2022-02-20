@@ -1,34 +1,35 @@
 # Ledger
 
-This library implements an event log, entries can be written, and consumers
-of the log will resume the reading since the last known checkpoint. The behaviour
-for missing checkpoints can be customized, supporting latest, earliest and custom
-offset, each one changing the starting point from which the consumer will read
-the log.
+This library implements an event log and imitates how kafka consumers work.
+Writers commit entries into the log, and readers consume events. Each reader
+can be configured to consume from the first offset, from the last offset
+or from a custom offset. Once a reader has a committed offset, when it is
+stopped/restarted, the reader will resume from the last committed offset.
 
-It does so with two primitives:
+These are the basic building blocks:
 
-* Ledger writer, writes events and commits offsets.
-* Ledger reader, reads written events from a given checkpoint.
+* `ledger.Writer` writes events to the log
+* `ledger.Reader` reads events from the event log
+* `ledger.Message` returned when reading, when the message is
+processed trigger a commit with `msg.Commit()` to advance the reader offset
 
-The underlying storage is a badger key value store.
+Additionally, there are:
 
-Ledger can be used to ensure all events that reach your application
-are handled without a loss (in-process), plans for the future could
-involve a distributed ledger.
+* `ledger.PartitionedWriter` which internally keeps as many logs
+as partitions. Uses a round-robin strategy to distribute the writes.
+* `ledger.PartitionedReader` which supports reading messages from
+the partitions, emitting them in the original write order
+
+The underlying storage is a badger key value store. Badger can be
+configured to persist on disk, or keep everything in memory.
 
 ## Development
 
-Running tests with `go test --tags debug ...` will enable debug level logging
+Run tests with `go test --tags debug ...` to enable debug level logging
 
 ## Re-generating protos
 
 Make sure you have `protoc-gen-go` and `protoc-gen-go-grpc`, follow this guide:
 https://grpc.io/docs/languages/go/quickstart/
 
-## Project status
-
-This was an internal package for a pet project of mine. Its in process
-of being open-sourced and better generalized. Expect breaking changes
-in the APIs. It's not a mature project, and the whole idea behind
-publishing it is to make it mature.
+Then run `make compile-protos`
