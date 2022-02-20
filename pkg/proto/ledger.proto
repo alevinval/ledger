@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+option go_package = "pkg/proto";
+
+service Ledger {
+  // Reader
+  rpc Read (ReadRequest) returns (stream Message) {}
+  rpc Commit (CommitRequest) returns (CommitResponse) {}
+
+  // Writer
+  rpc Write (WriteRequest) returns (WriteResponse) {}
+  rpc CloseWriter (WriterCloseRequest) returns (WriterCloseResponse) {}
+  rpc CloseReader (ReaderCloseRequest) returns (ReaderCloseResponse) {}
+}
+
+message ReadRequest {
+  string writer_id = 1;
+  string reader_id = 2;
+}
+
+message Message {
+  uint64 offset = 1;
+  bytes data = 2;
+}
+
+message CommitRequest {
+  string writer_id = 1;
+  string reader_id = 2;
+  uint64 offset = 3;
+}
+
+message CommitResponse {}
+
+message WriteRequest {
+  string writer_id = 1;
+  bytes data = 2;
+}
+
+message WriteResponse {
+  uint64 offset = 1;
+}
+
+message WriterCloseRequest {
+  string writer_id = 1;
+}
+
+message WriterCloseResponse {}
+
+
+message ReaderCloseRequest {
+  string writer_id = 1;
+  string reader_id = 2;
+}
+
+message ReaderCloseResponse {}

@@ -119,6 +119,10 @@ func (r *Reader) GetCheckpoint() (*proto.Checkpoint, error) {
 	return r.checkpoint.GetCheckpoint()
 }
 
+func (r *Reader) Commit(offset uint64) error {
+	return r.checkpoint.Commit(offset)
+}
+
 // Close the reader and stop fetching records.
 func (r *Reader) Close() {
 	r.mu.Lock()

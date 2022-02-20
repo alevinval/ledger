@@ -10,4 +10,13 @@ compile-protos:
 		--go-grpc_opt=paths=source_relative \
 		pkg/proto/*.proto
 
-.PHONY: cover compile-protos
+run-server:
+	go run ./cmd/remote/server
+
+run-writer:
+	go run ./cmd/remote/writer
+
+run-reader:
+	go run ./cmd/remote/reader
+
+.PHONY: cover compile-protos run-server run-writer run-reader

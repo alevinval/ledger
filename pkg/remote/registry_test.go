@@ -1,4 +1,4 @@
-package exp
+package remote
 
 import (
 	"testing"
