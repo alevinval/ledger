@@ -5,7 +5,9 @@ import (
 	"github.com/alevinval/ledger/internal/checkpoint"
 )
 
-var _ base.Message = (*messageImpl)(nil)
+type Message = base.BaseMessage
+
+var _ Message = (*messageImpl)(nil)
 
 type (
 	messageImpl struct {

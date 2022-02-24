@@ -23,7 +23,7 @@ type partitionedWriter interface {
 }
 
 type reader interface {
-	Read() (<-chan base.Message, error)
+	Read() (<-chan base.BaseMessage, error)
 }
 
 func AssertCheckpointAt(t *testing.T, c checkpointable, expected uint64) {

@@ -3,7 +3,6 @@ package ledger
 import (
 	"sync"
 
-	"github.com/alevinval/ledger/internal/base"
 	"go.uber.org/zap"
 )
 
@@ -11,12 +10,12 @@ import (
 type PartitionedReader struct {
 	mu sync.RWMutex
 
-	out        chan base.Message
+	out        chan Message
 	id         string
 	readers    []*Reader
 	partitions int
 
-	isClosed   bool
+	isClosed bool
 }
 
 func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, error) {
@@ -30,7 +29,7 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 		id:         readerID,
 		readers:    readers,
 		partitions: pw.partitions,
-		out:        make(chan base.Message, 1),
+		out:        make(chan Message, 1),
 	}
 
 	err = r.startFetcher()
@@ -42,7 +41,7 @@ func (pw *PartitionedWriter) NewReader(readerID string) (*PartitionedReader, err
 	return r, nil
 }
 
-func (r *PartitionedReader) Read() (<-chan base.Message, error) {
+func (r *PartitionedReader) Read() (<-chan Message, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -82,7 +81,7 @@ func (r *PartitionedReader) startFetcher() error {
 	return nil
 }
 
-func (r *PartitionedReader) fetcher(channels []<-chan base.Message) {
+func (r *PartitionedReader) fetcher(channels []<-chan Message) {
 	for {
 		for i := range channels {
 			msg, open := <-channels[i]

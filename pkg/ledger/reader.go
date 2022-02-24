@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/alevinval/ledger/internal/base"
 	"github.com/alevinval/ledger/internal/checkpoint"
 	"github.com/alevinval/ledger/internal/log"
 	"github.com/alevinval/ledger/pkg/proto"
@@ -33,7 +32,7 @@ type (
 
 		fetcherClose       chan emptyObj
 		fetcherCloseNotify chan emptyObj
-		messages           chan base.Message
+		messages           chan Message
 		triggerFetch       chan emptyObj
 
 		id               string
@@ -65,7 +64,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 		opts:         opts,
 		writer:       w,
 
-		messages:           make(chan base.Message),
+		messages:           make(chan Message),
 		triggerFetch:       make(chan emptyObj, 1),
 		fetcherClose:       make(chan emptyObj),
 		fetcherCloseNotify: make(chan emptyObj),
@@ -103,7 +102,7 @@ func (r *Reader) initialise() error {
 // Read the ledger, returns a channel where messages can be received
 // by the consumer of this API.
 // An error is returned in case the Reader is already closed.
-func (r *Reader) Read() (<-chan base.Message, error) {
+func (r *Reader) Read() (<-chan Message, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
