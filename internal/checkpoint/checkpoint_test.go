@@ -132,7 +132,7 @@ func withWriterAndReader(opts *base.Options, fn func(writer *Checkpoint, reader 
 
 func withCheckpoint(basePrefix string, opts *base.Options, fn func(c *Checkpoint)) {
 	withStorage(opts, func(storage *storage.Storage) {
-		checkpoint := NewCheckpoint(basePrefix, storage, opts)
+		checkpoint := New(basePrefix, storage, opts)
 		fn(checkpoint)
 	})
 }

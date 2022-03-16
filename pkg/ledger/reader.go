@@ -60,7 +60,7 @@ func (w *Writer) NewReaderOpts(id string, opts *Options) (*Reader, error) {
 	r := &Reader{
 		id:           id,
 		writeScanKey: buildWriteScanKey(w.basePrefix),
-		checkpoint:   checkpoint.NewCheckpoint(basePrefix, w.storage, opts),
+		checkpoint:   checkpoint.New(basePrefix, w.storage, opts),
 		opts:         opts,
 		writer:       w,
 

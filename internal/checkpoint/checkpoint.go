@@ -30,7 +30,7 @@ type Checkpoint struct {
 	key []byte
 }
 
-func NewCheckpoint(basePrefix string, s *storage.Storage, opts *base.Options) *Checkpoint {
+func New(basePrefix string, s *storage.Storage, opts *base.Options) *Checkpoint {
 	return &Checkpoint{
 		key:     buildCheckpointKey(basePrefix),
 		storage: s,

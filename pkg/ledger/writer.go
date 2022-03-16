@@ -59,7 +59,7 @@ func NewWriterOpts(id string, db *badger.DB, opts *Options) (*Writer, error) {
 	w := &Writer{
 		id:         id,
 		basePrefix: basePrefix,
-		checkpoint: checkpoint.NewCheckpoint(basePrefix, storage, opts),
+		checkpoint: checkpoint.New(basePrefix, storage, opts),
 		storage:    storage,
 		writeSeq:   writeSeq,
 		writerListener: &writerListener{
